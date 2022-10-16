@@ -1,0 +1,6480 @@
+pragma solidity ^0.4.19;
+
+
+
+
+contract ACOwned {
+
+  address public owner;
+  address public new_owner;
+  bool is_ac_owned_init;
+
+  
+  modifier if_owner() {
+    require(is_owner());
+    _;
+  }
+
+  function init_ac_owned()
+           internal
+           returns (bool _success)
+  {
+    if (is_ac_owned_init == false) {
+      owner = msg.sender;
+      is_ac_owned_init = true;
+    }
+    _success = true;
+  }
+
+  function is_owner()
+           private
+           constant
+           returns (bool _is_owner)
+  {
+    _is_owner = (msg.sender == owner);
+  }
+
+  function change_owner(address _new_owner)
+           if_owner()
+           public
+           returns (bool _success)
+  {
+    new_owner = _new_owner;
+    _success = true;
+  }
+
+  function claim_ownership()
+           public
+           returns (bool _success)
+  {
+    require(msg.sender == new_owner);
+    owner = new_owner;
+    _success = true;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+contract ACGroups is ACOwned {
+
+  bool is_ac_groups_init = false;
+
+  struct Group {
+    mapping(address => bool) members;
+  }
+
+  mapping (bytes32 => Group) groups;
+
+  modifier if_group(bytes32 _group_name) {
+    require(groups[_group_name].members[msg.sender]);
+    _;
+  }
+
+  function init_ac_groups()
+           internal
+           returns (bool _success)
+  {
+    if(is_ac_owned_init == false) {
+      init_ac_owned();
+    }
+    if(is_ac_groups_init == false) {
+      groups["admins"].members[msg.sender] = true;
+      is_ac_groups_init = true;
+    }
+    _success = true;
+  }
+
+  function register_admin(address _newadmin)
+           if_owner
+           public
+           returns (bool _success)
+  {
+    groups["admins"].members[_newadmin] = true;
+    _success = true;
+  }
+
+  function unregister_admin(address _oldadmin)
+           if_owner
+           public
+           returns (bool _success)
+  {
+    groups["admins"].members[_oldadmin] = false;
+    _success = true;
+  }
+
+  function add_user_to_group(bytes32 _group, address _user)
+           if_group("admins")
+           public
+           returns (bool _success)
+  {
+    require(_group != "admins");
+    groups[_group].members[_user] = true;
+    _success = true;
+  }
+
+  function delete_user_from_group(bytes32 _group, address _user)
+           if_group("admins")
+           public
+           returns (bool _success)
+  {
+    require(_group != "admins");
+    groups[_group].members[_user] = false;
+    _success = true;
+  }
+
+  function is_group_member_of(bytes32 _group, address _user)
+           public
+           constant
+           returns (bool _ismember)
+  {
+    _ismember = groups[_group].members[_user];
+  }
+
+  function claim_ownership()
+           public
+           returns (bool _success)
+  {
+    
+    groups["admins"].members[owner] = false;
+    groups["admins"].members[new_owner] = true;
+    _success = super.claim_ownership();
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+contract Constants {
+  address constant NULL_ADDRESS = address(0x0);
+  uint256 constant ZERO = uint256(0);
+  bytes32 constant EMPTY = bytes32(0x0);
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+contract ContractResolver is ACGroups, Constants {
+
+  mapping (bytes32 => address) contracts;
+  event RegisterEvent(bytes32 indexed _contract_name,
+                      address indexed _contract_address);
+  event UnRegisterEvent(bytes32 indexed _contract_name);
+  bool public locked;
+  bool public time_locked;
+  uint public grace_period;
+
+  modifier unless_registered(bytes32 _key) {
+    require(contracts[_key] == NULL_ADDRESS);
+    _;
+  }
+
+  modifier if_owner_origin() {
+    require(tx.origin == owner);
+    _;
+  }
+
+  
+  
+  modifier if_sender_is(bytes32 _contract) {
+    require(msg.sender == get_contract(_contract));
+    _;
+  }
+
+  modifier locked_after_period() {
+    if (time_locked == false) {
+      _;
+    } else {
+      require(grace_period >= now);
+      _;
+    }
+  }
+
+  modifier if_not_locked() {
+    require(locked == false);
+    _;
+  }
+
+  
+  function ContractResolver() public
+  {
+    require(init_ac_groups());
+    groups["nsadmins"].members[owner] = true;
+    locked = false;
+  }
+
+  
+  
+  
+  
+  
+  function init_register_contract(bytes32 _key, address _contract_address)
+           if_owner_origin()
+           if_not_locked()
+           unless_registered(_key)
+           locked_after_period()
+           public
+           returns (bool _success)
+  {
+    contracts[_key] = _contract_address;
+    _success = true;
+  }
+
+  
+  
+  function lock_resolver()
+           if_group("nsadmins")
+           public
+           returns (bool _success)
+  {
+    locked = true;
+    _success = true;
+  }
+
+  
+  
+  function unlock_resolver()
+           if_group("nsadmins")
+           public
+           returns (bool _success)
+  {
+     locked = false;
+     _success = true;
+  }
+
+  
+  
+  function enable_time_locking(uint _grace_period)
+           if_owner()
+           locked_after_period()
+           public
+           returns (bool _success)
+  {
+    grace_period = _grace_period;
+    time_locked = true;
+    _success = true;
+  }
+
+  
+  
+  
+  
+  function register_contract(bytes32 _key, address _contract)
+           if_group("nsadmins")
+           if_owner_origin()
+           if_not_locked()
+           locked_after_period()
+           unless_registered(_key)
+           public
+           returns (bool _success)
+  {
+    contracts[_key] = _contract;
+    RegisterEvent(_key, _contract);
+    _success = true;
+  }
+
+  
+  
+  
+  
+  function unregister_contract(bytes32 _key)
+           locked_after_period()
+           if_owner_origin()
+           if_not_locked()
+           if_sender_is(_key)
+           public
+           returns (bool _success)
+  {
+    delete contracts[_key];
+    UnRegisterEvent(_key);
+    _success = true;
+  }
+
+  
+  
+  
+  function get_contract(bytes32 _key)
+           public
+           constant
+           returns (address _contract)
+  {
+    require(contracts[_key] != NULL_ADDRESS);
+    _contract = contracts[_key];
+  }
+
+  function claim_ownership()
+           public
+           returns (bool _success)
+  {
+    
+    groups["nsadmins"].members[owner] = false;
+    groups["nsadmins"].members[new_owner] = true;
+    _success = super.claim_ownership();
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+contract ResolverClient {
+
+  
+  address public resolver;
+  bytes32 public key;
+
+  
+  address public CONTRACT_ADDRESS;
+
+  
+  
+  modifier if_sender_is(bytes32 _contract) {
+    require(msg.sender == ContractResolver(resolver).get_contract(_contract));
+    _;
+  }
+
+  
+  modifier unless_resolver_is_locked() {
+    require(is_locked() == false);
+    _;
+  }
+
+  
+  
+  
+  function init(bytes32 _key, address _resolver)
+           internal
+           returns (bool _success)
+  {
+    bool _is_locked = ContractResolver(_resolver).locked();
+    if (_is_locked == false) {
+      CONTRACT_ADDRESS = address(this);
+      resolver = _resolver;
+      key = _key;
+      require(ContractResolver(resolver).init_register_contract(key, CONTRACT_ADDRESS));
+      _success = true;
+    }  else {
+      _success = false;
+    }
+  }
+
+  
+  
+  function destroy()
+           public
+           returns (bool _success)
+  {
+    bool _is_locked = ContractResolver(resolver).locked();
+    require(!_is_locked);
+
+    address _owner_of_contract_resolver = ContractResolver(resolver).owner();
+    require(msg.sender == _owner_of_contract_resolver);
+
+    _success = ContractResolver(resolver).unregister_contract(key);
+    require(_success);
+
+    selfdestruct(_owner_of_contract_resolver);
+  }
+
+  
+  
+  function is_locked()
+           private
+           constant
+           returns (bool _locked)
+  {
+    _locked = ContractResolver(resolver).locked();
+  }
+
+  
+  
+  
+  function get_contract(bytes32 _key)
+           public
+           constant
+           returns (address _contract)
+  {
+    _contract = ContractResolver(resolver).get_contract(_key);
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+library DoublyLinkedList {
+
+  struct Item {
+    bytes32 item;
+    uint256 previous_index;
+    uint256 next_index;
+  }
+
+  struct Data {
+    uint256 first_index;
+    uint256 last_index;
+    uint256 count;
+    mapping(bytes32 => uint256) item_index;
+    mapping(uint256 => bool) valid_indexes;
+    Item[] collection;
+  }
+
+  struct IndexedUint {
+    mapping(bytes32 => Data) data;
+  }
+
+  struct IndexedAddress {
+    mapping(bytes32 => Data) data;
+  }
+
+  struct IndexedBytes {
+    mapping(bytes32 => Data) data;
+  }
+
+  struct Address {
+    Data data;
+  }
+
+  struct Bytes {
+    Data data;
+  }
+
+  struct Uint {
+    Data data;
+  }
+
+  uint256 constant NONE = uint256(0);
+  bytes32 constant EMPTY_BYTES = bytes32(0x0);
+  address constant NULL_ADDRESS = address(0x0);
+
+  function find(Data storage self, bytes32 _item)
+           public
+           constant
+           returns (uint256 _item_index)
+  {
+    if ((self.item_index[_item] == NONE) && (self.count == NONE)) {
+      _item_index = NONE;
+    } else {
+      _item_index = self.item_index[_item];
+    }
+  }
+
+  function get(Data storage self, uint256 _item_index)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    if (self.valid_indexes[_item_index] == true) {
+      _item = self.collection[_item_index - 1].item;
+    } else {
+      _item = EMPTY_BYTES;
+    }
+  }
+
+  function append(Data storage self, bytes32 _data)
+           internal
+           returns (bool _success)
+  {
+    if (find(self, _data) != NONE || _data == bytes32("")) { // rejects addition of empty values
+      _success = false;
+    } else {
+      uint256 _index = uint256(self.collection.push(Item({item: _data, previous_index: self.last_index, next_index: NONE})));
+      if (self.last_index == NONE) {
+        if ((self.first_index != NONE) || (self.count != NONE)) {
+          revert();
+        } else {
+          self.first_index = self.last_index = _index;
+          self.count = 1;
+        }
+      } else {
+        self.collection[self.last_index - 1].next_index = _index;
+        self.last_index = _index;
+        self.count++;
+      }
+      self.valid_indexes[_index] = true;
+      self.item_index[_data] = _index;
+      _success = true;
+    }
+  }
+
+  function remove(Data storage self, uint256 _index)
+           internal
+           returns (bool _success)
+  {
+    if (self.valid_indexes[_index] == true) {
+      Item memory item = self.collection[_index - 1];
+      if (item.previous_index == NONE) {
+        self.first_index = item.next_index;
+      } else {
+        self.collection[item.previous_index - 1].next_index = item.next_index;
+      }
+
+      if (item.next_index == NONE) {
+        self.last_index = item.previous_index;
+      } else {
+        self.collection[item.next_index - 1].previous_index = item.previous_index;
+      }
+      delete self.collection[_index - 1];
+      self.valid_indexes[_index] = false;
+      delete self.item_index[item.item];
+      self.count--;
+      _success = true;
+    } else {
+      _success = false;
+    }
+  }
+
+  function remove_item(Data storage self, bytes32 _item)
+           internal
+           returns (bool _success)
+  {
+    uint256 _item_index = find(self, _item);
+    if (_item_index != NONE) {
+      require(remove(self, _item_index));
+      _success = true;
+    } else {
+      _success = false;
+    }
+    return _success;
+  }
+
+  function total(Data storage self)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = self.count;
+  }
+
+  function start(Data storage self)
+           public
+           constant
+           returns (uint256 _item_index)
+  {
+    _item_index = self.first_index;
+    return _item_index;
+  }
+
+  function start_item(Data storage self)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    uint256 _item_index = start(self);
+    if (_item_index != NONE) {
+      _item = get(self, _item_index);
+    } else {
+      _item = EMPTY_BYTES;
+    }
+  }
+
+  function end(Data storage self)
+           public
+           constant
+           returns (uint256 _item_index)
+  {
+    _item_index = self.last_index;
+    return _item_index;
+  }
+
+  function end_item(Data storage self)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    uint256 _item_index = end(self);
+    if (_item_index != NONE) {
+      _item = get(self, _item_index);
+    } else {
+      _item = EMPTY_BYTES;
+    }
+  }
+
+  function valid(Data storage self, uint256 _item_index)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = self.valid_indexes[_item_index];
+    //_yes = ((_item_index - 1) < self.collection.length);
+  }
+
+  function valid_item(Data storage self, bytes32 _item)
+           public
+           constant
+           returns (bool _yes)
+  {
+    uint256 _item_index = self.item_index[_item];
+    _yes = self.valid_indexes[_item_index];
+  }
+
+  function previous(Data storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _previous_index)
+  {
+    if (self.valid_indexes[_current_index] == true) {
+      _previous_index = self.collection[_current_index - 1].previous_index;
+    } else {
+      _previous_index = NONE;
+    }
+  }
+
+  function previous_item(Data storage self, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _previous_item)
+  {
+    uint256 _current_index = find(self, _current_item);
+    if (_current_index != NONE) {
+      uint256 _previous_index = previous(self, _current_index);
+      _previous_item = get(self, _previous_index);
+    } else {
+      _previous_item = EMPTY_BYTES;
+    }
+  }
+
+  function next(Data storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _next_index)
+  {
+    if (self.valid_indexes[_current_index] == true) {
+      _next_index = self.collection[_current_index - 1].next_index;
+    } else {
+      _next_index = NONE;
+    }
+  }
+
+  function next_item(Data storage self, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _next_item)
+  {
+    uint256 _current_index = find(self, _current_item);
+    if (_current_index != NONE) {
+      uint256 _next_index = next(self, _current_index);
+      _next_item = get(self, _next_index);
+    } else {
+      _next_item = EMPTY_BYTES;
+    }
+  }
+
+  function find(Uint storage self, uint256 _item)
+           public
+           constant
+           returns (uint256 _item_index)
+  {
+    _item_index = find(self.data, bytes32(_item));
+  }
+
+  function get(Uint storage self, uint256 _item_index)
+           public
+           constant
+           returns (uint256 _item)
+  {
+    _item = uint256(get(self.data, _item_index));
+  }
+
+
+  function append(Uint storage self, uint256 _data)
+           public
+           returns (bool _success)
+  {
+    _success = append(self.data, bytes32(_data));
+  }
+
+  function remove(Uint storage self, uint256 _index)
+           internal
+           returns (bool _success)
+  {
+    _success = remove(self.data, _index);
+  }
+
+  function remove_item(Uint storage self, uint256 _item)
+           public
+           returns (bool _success)
+  {
+    _success = remove_item(self.data, bytes32(_item));
+  }
+
+  function total(Uint storage self)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = total(self.data);
+  }
+
+  function start(Uint storage self)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = start(self.data);
+  }
+
+  function start_item(Uint storage self)
+           public
+           constant
+           returns (uint256 _start_item)
+  {
+    _start_item = uint256(start_item(self.data));
+  }
+
+
+  function end(Uint storage self)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = end(self.data);
+  }
+
+  function end_item(Uint storage self)
+           public
+           constant
+           returns (uint256 _end_item)
+  {
+    _end_item = uint256(end_item(self.data));
+  }
+
+  function valid(Uint storage self, uint256 _item_index)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid(self.data, _item_index);
+  }
+
+  function valid_item(Uint storage self, uint256 _item)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid_item(self.data, bytes32(_item));
+  }
+
+  function previous(Uint storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _previous_index)
+  {
+    _previous_index = previous(self.data, _current_index);
+  }
+
+  function previous_item(Uint storage self, uint256 _current_item)
+           public
+           constant
+           returns (uint256 _previous_item)
+  {
+    _previous_item = uint256(previous_item(self.data, bytes32(_current_item)));
+  }
+
+  function next(Uint storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _next_index)
+  {
+    _next_index = next(self.data, _current_index);
+  }
+
+  function next_item(Uint storage self, uint256 _current_item)
+           public
+           constant
+           returns (uint256 _next_item)
+  {
+    _next_item = uint256(next_item(self.data, bytes32(_current_item)));
+  }
+
+  function find(Address storage self, address _item)
+           public
+           constant
+           returns (uint256 _item_index)
+  {
+    _item_index = find(self.data, bytes32(_item));
+  }
+
+  function get(Address storage self, uint256 _item_index)
+           public
+           constant
+           returns (address _item)
+  {
+    _item = address(get(self.data, _item_index));
+  }
+
+
+  function find(IndexedUint storage self, bytes32 _collection_index, uint256 _item)
+           public
+           constant
+           returns (uint256 _item_index)
+  {
+    _item_index = find(self.data[_collection_index], bytes32(_item));
+  }
+
+  function get(IndexedUint storage self, bytes32 _collection_index, uint256 _item_index)
+           public
+           constant
+           returns (uint256 _item)
+  {
+    _item = uint256(get(self.data[_collection_index], _item_index));
+  }
+
+
+  function append(IndexedUint storage self, bytes32 _collection_index, uint256 _data)
+           public
+           returns (bool _success)
+  {
+    _success = append(self.data[_collection_index], bytes32(_data));
+  }
+
+  function remove(IndexedUint storage self, bytes32 _collection_index, uint256 _index)
+           internal
+           returns (bool _success)
+  {
+    _success = remove(self.data[_collection_index], _index);
+  }
+
+  function remove_item(IndexedUint storage self, bytes32 _collection_index, uint256 _item)
+           public
+           returns (bool _success)
+  {
+    _success = remove_item(self.data[_collection_index], bytes32(_item));
+  }
+
+  function total(IndexedUint storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = total(self.data[_collection_index]);
+  }
+
+  function start(IndexedUint storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = start(self.data[_collection_index]);
+  }
+
+  function start_item(IndexedUint storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _start_item)
+  {
+    _start_item = uint256(start_item(self.data[_collection_index]));
+  }
+
+
+  function end(IndexedUint storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = end(self.data[_collection_index]);
+  }
+
+  function end_item(IndexedUint storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _end_item)
+  {
+    _end_item = uint256(end_item(self.data[_collection_index]));
+  }
+
+  function valid(IndexedUint storage self, bytes32 _collection_index, uint256 _item_index)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid(self.data[_collection_index], _item_index);
+  }
+
+  function valid_item(IndexedUint storage self, bytes32 _collection_index, uint256 _item)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid_item(self.data[_collection_index], bytes32(_item));
+  }
+
+  function previous(IndexedUint storage self, bytes32 _collection_index, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _previous_index)
+  {
+    _previous_index = previous(self.data[_collection_index], _current_index);
+  }
+
+  function previous_item(IndexedUint storage self, bytes32 _collection_index, uint256 _current_item)
+           public
+           constant
+           returns (uint256 _previous_item)
+  {
+    _previous_item = uint256(previous_item(self.data[_collection_index], bytes32(_current_item)));
+  }
+
+  function next(IndexedUint storage self, bytes32 _collection_index, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _next_index)
+  {
+    _next_index = next(self.data[_collection_index], _current_index);
+  }
+
+  function next_item(IndexedUint storage self, bytes32 _collection_index, uint256 _current_item)
+           public
+           constant
+           returns (uint256 _next_item)
+  {
+    _next_item = uint256(next_item(self.data[_collection_index], bytes32(_current_item)));
+  }
+
+  function append(Address storage self, address _data)
+           public
+           returns (bool _success)
+  {
+    _success = append(self.data, bytes32(_data));
+  }
+
+  function remove(Address storage self, uint256 _index)
+           internal
+           returns (bool _success)
+  {
+    _success = remove(self.data, _index);
+  }
+
+
+  function remove_item(Address storage self, address _item)
+           public
+           returns (bool _success)
+  {
+    _success = remove_item(self.data, bytes32(_item));
+  }
+
+  function total(Address storage self)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = total(self.data);
+  }
+
+  function start(Address storage self)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = start(self.data);
+  }
+
+  function start_item(Address storage self)
+           public
+           constant
+           returns (address _start_item)
+  {
+    _start_item = address(start_item(self.data));
+  }
+
+
+  function end(Address storage self)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = end(self.data);
+  }
+
+  function end_item(Address storage self)
+           public
+           constant
+           returns (address _end_item)
+  {
+    _end_item = address(end_item(self.data));
+  }
+
+  function valid(Address storage self, uint256 _item_index)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid(self.data, _item_index);
+  }
+
+  function valid_item(Address storage self, address _item)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid_item(self.data, bytes32(_item));
+  }
+
+  function previous(Address storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _previous_index)
+  {
+    _previous_index = previous(self.data, _current_index);
+  }
+
+  function previous_item(Address storage self, address _current_item)
+           public
+           constant
+           returns (address _previous_item)
+  {
+    _previous_item = address(previous_item(self.data, bytes32(_current_item)));
+  }
+
+  function next(Address storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _next_index)
+  {
+    _next_index = next(self.data, _current_index);
+  }
+
+  function next_item(Address storage self, address _current_item)
+           public
+           constant
+           returns (address _next_item)
+  {
+    _next_item = address(next_item(self.data, bytes32(_current_item)));
+  }
+
+  function append(IndexedAddress storage self, bytes32 _collection_index, address _data)
+           public
+           returns (bool _success)
+  {
+    _success = append(self.data[_collection_index], bytes32(_data));
+  }
+
+  function remove(IndexedAddress storage self, bytes32 _collection_index, uint256 _index)
+           internal
+           returns (bool _success)
+  {
+    _success = remove(self.data[_collection_index], _index);
+  }
+
+
+  function remove_item(IndexedAddress storage self, bytes32 _collection_index, address _item)
+           public
+           returns (bool _success)
+  {
+    _success = remove_item(self.data[_collection_index], bytes32(_item));
+  }
+
+  function total(IndexedAddress storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = total(self.data[_collection_index]);
+  }
+
+  function start(IndexedAddress storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = start(self.data[_collection_index]);
+  }
+
+  function start_item(IndexedAddress storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (address _start_item)
+  {
+    _start_item = address(start_item(self.data[_collection_index]));
+  }
+
+
+  function end(IndexedAddress storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = end(self.data[_collection_index]);
+  }
+
+  function end_item(IndexedAddress storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (address _end_item)
+  {
+    _end_item = address(end_item(self.data[_collection_index]));
+  }
+
+  function valid(IndexedAddress storage self, bytes32 _collection_index, uint256 _item_index)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid(self.data[_collection_index], _item_index);
+  }
+
+  function valid_item(IndexedAddress storage self, bytes32 _collection_index, address _item)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid_item(self.data[_collection_index], bytes32(_item));
+  }
+
+  function previous(IndexedAddress storage self, bytes32 _collection_index, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _previous_index)
+  {
+    _previous_index = previous(self.data[_collection_index], _current_index);
+  }
+
+  function previous_item(IndexedAddress storage self, bytes32 _collection_index, address _current_item)
+           public
+           constant
+           returns (address _previous_item)
+  {
+    _previous_item = address(previous_item(self.data[_collection_index], bytes32(_current_item)));
+  }
+
+  function next(IndexedAddress storage self, bytes32 _collection_index, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _next_index)
+  {
+    _next_index = next(self.data[_collection_index], _current_index);
+  }
+
+  function next_item(IndexedAddress storage self, bytes32 _collection_index, address _current_item)
+           public
+           constant
+           returns (address _next_item)
+  {
+    _next_item = address(next_item(self.data[_collection_index], bytes32(_current_item)));
+  }
+
+
+  function find(Bytes storage self, bytes32 _item)
+           public
+           constant
+           returns (uint256 _item_index)
+  {
+    _item_index = find(self.data, _item);
+  }
+
+  function get(Bytes storage self, uint256 _item_index)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = get(self.data, _item_index);
+  }
+
+
+  function append(Bytes storage self, bytes32 _data)
+           public
+           returns (bool _success)
+  {
+    _success = append(self.data, _data);
+  }
+
+  function remove(Bytes storage self, uint256 _index)
+           internal
+           returns (bool _success)
+  {
+    _success = remove(self.data, _index);
+  }
+
+
+  function remove_item(Bytes storage self, bytes32 _item)
+           public
+           returns (bool _success)
+  {
+    _success = remove_item(self.data, _item);
+  }
+
+  function total(Bytes storage self)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = total(self.data);
+  }
+
+  function start(Bytes storage self)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = start(self.data);
+  }
+
+  function start_item(Bytes storage self)
+           public
+           constant
+           returns (bytes32 _start_item)
+  {
+    _start_item = start_item(self.data);
+  }
+
+
+  function end(Bytes storage self)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = end(self.data);
+  }
+
+  function end_item(Bytes storage self)
+           public
+           constant
+           returns (bytes32 _end_item)
+  {
+    _end_item = end_item(self.data);
+  }
+
+  function valid(Bytes storage self, uint256 _item_index)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid(self.data, _item_index);
+  }
+
+  function valid_item(Bytes storage self, bytes32 _item)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid_item(self.data, _item);
+  }
+
+  function previous(Bytes storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _previous_index)
+  {
+    _previous_index = previous(self.data, _current_index);
+  }
+
+  function previous_item(Bytes storage self, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _previous_item)
+  {
+    _previous_item = previous_item(self.data, _current_item);
+  }
+
+  function next(Bytes storage self, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _next_index)
+  {
+    _next_index = next(self.data, _current_index);
+  }
+
+  function next_item(Bytes storage self, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _next_item)
+  {
+    _next_item = next_item(self.data, _current_item);
+  }
+
+  function append(IndexedBytes storage self, bytes32 _collection_index, bytes32 _data)
+           public
+           returns (bool _success)
+  {
+    _success = append(self.data[_collection_index], bytes32(_data));
+  }
+
+  function remove(IndexedBytes storage self, bytes32 _collection_index, uint256 _index)
+           internal
+           returns (bool _success)
+  {
+    _success = remove(self.data[_collection_index], _index);
+  }
+
+
+  function remove_item(IndexedBytes storage self, bytes32 _collection_index, bytes32 _item)
+           public
+           returns (bool _success)
+  {
+    _success = remove_item(self.data[_collection_index], bytes32(_item));
+  }
+
+  function total(IndexedBytes storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = total(self.data[_collection_index]);
+  }
+
+  function start(IndexedBytes storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = start(self.data[_collection_index]);
+  }
+
+  function start_item(IndexedBytes storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (bytes32 _start_item)
+  {
+    _start_item = bytes32(start_item(self.data[_collection_index]));
+  }
+
+
+  function end(IndexedBytes storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (uint256 _index)
+  {
+    _index = end(self.data[_collection_index]);
+  }
+
+  function end_item(IndexedBytes storage self, bytes32 _collection_index)
+           public
+           constant
+           returns (bytes32 _end_item)
+  {
+    _end_item = bytes32(end_item(self.data[_collection_index]));
+  }
+
+  function valid(IndexedBytes storage self, bytes32 _collection_index, uint256 _item_index)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid(self.data[_collection_index], _item_index);
+  }
+
+  function valid_item(IndexedBytes storage self, bytes32 _collection_index, bytes32 _item)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = valid_item(self.data[_collection_index], bytes32(_item));
+  }
+
+  function previous(IndexedBytes storage self, bytes32 _collection_index, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _previous_index)
+  {
+    _previous_index = previous(self.data[_collection_index], _current_index);
+  }
+
+  function previous_item(IndexedBytes storage self, bytes32 _collection_index, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _previous_item)
+  {
+    _previous_item = bytes32(previous_item(self.data[_collection_index], bytes32(_current_item)));
+  }
+
+  function next(IndexedBytes storage self, bytes32 _collection_index, uint256 _current_index)
+           public
+           constant
+           returns (uint256 _next_index)
+  {
+    _next_index = next(self.data[_collection_index], _current_index);
+  }
+
+  function next_item(IndexedBytes storage self, bytes32 _collection_index, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _next_item)
+  {
+    _next_item = bytes32(next_item(self.data[_collection_index], bytes32(_current_item)));
+  }
+
+
+}
+
+// File: @digix/solidity-statemachine/contracts/lib/StateMachine.sol
+
+pragma solidity ^0.4.19;
+
+
+library StateMachine {
+
+  using DoublyLinkedList for DoublyLinkedList.Bytes;
+
+  struct System {
+    mapping(bytes32 => Item) items;
+    mapping(address => uint256) to_role;
+    mapping(uint256 => mapping (uint256 => mapping(uint256 => bool))) access_control;
+    mapping(uint256 => DoublyLinkedList.Bytes) lists_by_state;
+    mapping(uint256 => bytes32) state_ids_to_name;
+    mapping(uint256 => bytes32) role_ids_to_name;
+    DoublyLinkedList.Bytes global_list;
+    bytes32 seed;
+  }
+
+  struct Item {
+    uint256 state;
+  }
+
+  function set_state_name(System storage _system, uint256 _state_id, bytes32 _state_name)
+           internal
+           returns (bool _success)
+  {
+    _system.state_ids_to_name[_state_id] = _state_name;
+    _success = true;
+  }
+
+  function get_state_name(System storage _system, uint256 _state_id)
+           internal
+           constant
+           returns (bytes32 _state_name)
+  {
+    if (_state_id == 0) {
+      _state_name = bytes32("none");
+    } else {
+      _state_name = _system.state_ids_to_name[_state_id];
+    }
+  }
+
+  function get_item_state_id(System storage _system, bytes32 _item)
+           internal
+           constant
+           returns (uint256 _state_id)
+  {
+    _state_id = _system.items[_item].state;
+  }
+
+  function get_item_state_name(System storage _system, bytes32 _item)
+           internal
+           constant
+           returns (bytes32 _state_name)
+  {
+    _state_name = get_state_name(_system, get_item_state_id(_system, _item));
+  }
+
+  function set_role_name(System storage _system, uint256 _role_id, bytes32 _role_name)
+           internal
+           returns (bool _success)
+  {
+    _system.role_ids_to_name[_role_id] = _role_name;
+    _success = true;
+  }
+
+  function get_role_name(System storage _system, uint256 _role_id)
+           internal
+           constant
+           returns (bytes32 _role_name)
+  {
+    if (_role_id == 0) {
+      _role_name = bytes32("none");
+    } else {
+      _role_name = _system.role_ids_to_name[_role_id];
+    }
+  }
+
+  function get_entity_role_id(System storage _system, address _entity)
+           internal
+           constant
+           returns (uint256 _role_id)
+  {
+    _role_id = _system.to_role[_entity];
+  }
+
+  function set_role(System storage _system, address _entity, uint256 _role_id)
+           internal
+           returns (bool _success)
+  {
+    _system.to_role[_entity] = _role_id;
+    _success = true;
+  }
+
+  function unset_role(System storage _system, address _entity)
+           internal
+           returns (bool _success)
+  {
+    if (_system.to_role[_entity] == 0) {
+      _success = false;
+    } else {
+      delete _system.to_role[_entity];
+      _success = true;
+    }
+  }
+
+  function grant_access(System storage _system, uint256 _by_role, uint256 _from_state, uint256 _to_state)
+           internal
+           returns (bool _success)
+  {
+    if (_system.access_control[_by_role][_from_state][_to_state] == false) {
+      _system.access_control[_by_role][_from_state][_to_state] = true;
+      _success = true;
+    } else {
+      _success = false;
+    }
+  }
+
+  function revoke_access(System storage _system, uint256 _by_role, uint256 _from_state, uint256 _to_state)
+           internal
+           returns (bool _success)
+  {
+    if(_system.access_control[_by_role][_from_state][_to_state] == true) {
+      _system.access_control[_by_role][_from_state][_to_state] = false;
+      _success = true;
+    } else {
+      _success = false;
+    }
+  }
+
+  function init(System storage _system)
+           internal
+           returns (bool _success)
+  {
+    require(_system.seed == bytes32(0x0));
+    _system.seed = bytes32(address(this));
+    _success = true;
+  }
+
+  function get_new_identifier(System storage _system)
+           internal
+           returns (bytes32 _new_id)
+  {
+    require(_system.seed != bytes32(0x0));
+    _system.seed = keccak256(_system.seed, now);
+    _new_id = _system.seed;
+  }
+
+  function create_item(System storage _system, uint256 _by_role)
+           internal
+           returns (bool _success, bytes32 _item)
+  {
+    require(_system.seed != bytes32(0x0)); 
+    if (_system.access_control[_by_role][0][1] == true) {
+      _item = get_new_identifier(_system);
+      _system.items[_item].state = 1;
+      require(_system.global_list.append(_item));
+      require(_system.lists_by_state[1].append(_item));
+      _success = true;
+    } else {
+      _success = false;
+      _item = bytes32(0x0);
+    }
+  }
+
+  function change_item_state(System storage _system, uint256 _by_role, bytes32 _item, uint256 _to_state)
+           internal
+           returns (bool _success, uint256 _from_state, uint256 _new_state)
+  {
+
+    _from_state = _system.items[_item].state;
+
+    bool _append_success;
+    bool _remove_success;
+    _new_state = _from_state;
+    _success = false;
+
+    if (_system.access_control[0][_from_state][_to_state] == true) {
+      _by_role = 0;
+    }
+
+    if (_system.access_control[_by_role][_from_state][_to_state] == true) {
+      _system.items[_item].state = _to_state;
+      _append_success = _system.lists_by_state[_to_state].append(_item);
+      _remove_success = _system.lists_by_state[_from_state].remove_item(_item);
+      _new_state = _system.items[_item].state;
+      _success = (_append_success && _remove_success);
+    }
+  }
+
+  function total_in_state(System storage _system, uint256 _state_id)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = _system.lists_by_state[_state_id].total();
+  }
+
+  function total(System storage _system)
+           public
+           constant
+           returns (uint256 _global_count)
+  {
+    _global_count = _system.global_list.total();
+  }
+
+  function get_first_in_global(System storage _system)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.global_list.start_item();
+  }
+
+  function get_last_in_global(System storage _system)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.global_list.end_item();
+  }
+
+  function get_next_from_in_global(System storage _system, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.global_list.next_item(_current_item);
+  }
+
+  function get_previous_from_in_global(System storage _system, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.global_list.previous_item(_current_item);
+  }
+
+  function get_first_in_state(System storage _system, uint256 _state_id)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.lists_by_state[_state_id].start_item();
+  }
+
+  function get_last_in_state(System storage _system, uint256 _state_id)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.lists_by_state[_state_id].end_item();
+  }
+
+  function get_next_from_in_state(System storage _system, uint256 _state_id, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.lists_by_state[_state_id].next_item(_current_item);
+  }
+
+  function get_previous_from_in_state(System storage _system, uint256 _state_id, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _system.lists_by_state[_state_id].previous_item(_current_item);
+  }
+
+  function check_role_access(System storage _system, uint256 _role_id, uint256 _from_state, uint256 _to_state)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = _system.access_control[_role_id][_from_state][_to_state];
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract IndexedBytesIteratorStorage {
+
+  using DoublyLinkedList for DoublyLinkedList.IndexedBytes;
+
+  
+  function read_first_from_indexed_bytesarray(DoublyLinkedList.IndexedBytes storage _list, bytes32 _collection_index)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.start_item(_collection_index);
+  }
+
+  
+  function read_last_from_indexed_bytesarray(DoublyLinkedList.IndexedBytes storage _list, bytes32 _collection_index)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.end_item(_collection_index);
+  }
+
+  
+  function read_next_from_indexed_bytesarray(DoublyLinkedList.IndexedBytes storage _list, bytes32 _collection_index, bytes32 _current_item)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.next_item(_collection_index, _current_item);
+  }
+
+  
+  function read_previous_from_indexed_bytesarray(DoublyLinkedList.IndexedBytes storage _list, bytes32 _collection_index, bytes32 _current_item)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.previous_item(_collection_index, _current_item);
+  }
+
+  
+  function read_total_indexed_bytesarray(DoublyLinkedList.IndexedBytes storage _list, bytes32 _collection_index)
+           internal
+           constant
+           returns (uint256 _count)
+  {
+    _count = _list.total(_collection_index);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+contract BytesIteratorStorage {
+
+  
+  using DoublyLinkedList for DoublyLinkedList.Bytes;
+
+  
+  function read_first_from_bytesarray(DoublyLinkedList.Bytes storage _list)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.start_item();
+  }
+
+  
+  function read_last_from_bytesarray(DoublyLinkedList.Bytes storage _list)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.end_item();
+  }
+
+  
+  function read_next_from_bytesarray(DoublyLinkedList.Bytes storage _list, bytes32 _current_item)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.next_item(_current_item);
+  }
+
+  
+  function read_previous_from_bytesarray(DoublyLinkedList.Bytes storage _list, bytes32 _current_item)
+           internal
+           constant
+           returns (bytes32 _item)
+  {
+    _item = _list.previous_item(_current_item);
+  }
+
+  
+  function read_total_bytesarray(DoublyLinkedList.Bytes storage _list)
+           internal
+           constant
+           returns (uint256 _count)
+  {
+    _count = _list.total();
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+contract DigixConstants {
+    
+    uint256 constant SECONDS_IN_A_DAY = 24 * 60 * 60;
+
+    
+    uint256 constant ASSET_EVENT_CREATED_VENDOR_ORDER = 1;
+    uint256 constant ASSET_EVENT_CREATED_TRANSFER_ORDER = 2;
+    uint256 constant ASSET_EVENT_CREATED_REPLACEMENT_ORDER = 3;
+    uint256 constant ASSET_EVENT_FULFILLED_VENDOR_ORDER = 4;
+    uint256 constant ASSET_EVENT_FULFILLED_TRANSFER_ORDER = 5;
+    uint256 constant ASSET_EVENT_FULFILLED_REPLACEMENT_ORDER = 6;
+    uint256 constant ASSET_EVENT_MINTED = 7;
+    uint256 constant ASSET_EVENT_MINTED_REPLACEMENT = 8;
+    uint256 constant ASSET_EVENT_RECASTED = 9;
+    uint256 constant ASSET_EVENT_REDEEMED = 10;
+    uint256 constant ASSET_EVENT_FAILED_AUDIT = 11;
+    uint256 constant ASSET_EVENT_ADMIN_FAILED = 12;
+    uint256 constant ASSET_EVENT_REMINTED = 13;
+
+    
+    uint256 constant ROLE_ZERO_ANYONE = 0;
+    uint256 constant ROLE_ROOT = 1;
+    uint256 constant ROLE_VENDOR = 2;
+    uint256 constant ROLE_XFERAUTH = 3;
+    uint256 constant ROLE_POPADMIN = 4;
+    uint256 constant ROLE_CUSTODIAN = 5;
+    uint256 constant ROLE_AUDITOR = 6;
+    uint256 constant ROLE_MARKETPLACE_ADMIN = 7;
+    uint256 constant ROLE_KYC_ADMIN = 8;
+    uint256 constant ROLE_FEES_ADMIN = 9;
+    uint256 constant ROLE_DOCS_UPLOADER = 10;
+    uint256 constant ROLE_KYC_RECASTER = 11;
+    uint256 constant ROLE_FEES_DISTRIBUTION_ADMIN = 12;
+
+    
+    uint256 constant STATE_ZERO_UNDEFINED = 0;
+    uint256 constant STATE_CREATED = 1;
+    uint256 constant STATE_VENDOR_ORDER = 2;
+    uint256 constant STATE_TRANSFER = 3;
+    uint256 constant STATE_CUSTODIAN_DELIVERY = 4;
+    uint256 constant STATE_MINTED = 5;
+    uint256 constant STATE_AUDIT_FAILURE = 6;
+    uint256 constant STATE_REPLACEMENT_ORDER = 7;
+    uint256 constant STATE_REPLACEMENT_DELIVERY = 8;
+    uint256 constant STATE_RECASTED = 9;
+    uint256 constant STATE_REDEEMED = 10;
+    uint256 constant STATE_ADMIN_FAILURE = 11;
+
+
+
+    
+    bytes32 constant CONTRACT_INTERACTIVE_ASSETS_EXPLORER = "i:asset:explorer";
+    bytes32 constant CONTRACT_INTERACTIVE_DIGIX_DIRECTORY = "i:directory";
+    bytes32 constant CONTRACT_INTERACTIVE_MARKETPLACE = "i:mp";
+    bytes32 constant CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN = "i:mpadmin";
+    bytes32 constant CONTRACT_INTERACTIVE_POPADMIN = "i:popadmin";
+    bytes32 constant CONTRACT_INTERACTIVE_PRODUCTS_LIST = "i:products";
+    bytes32 constant CONTRACT_INTERACTIVE_TOKEN = "i:token";
+    bytes32 constant CONTRACT_INTERACTIVE_BULK_WRAPPER = "i:bulk-wrapper";
+    bytes32 constant CONTRACT_INTERACTIVE_TOKEN_CONFIG = "i:token:config";
+    bytes32 constant CONTRACT_INTERACTIVE_TOKEN_INFORMATION = "i:token:information";
+    bytes32 constant CONTRACT_INTERACTIVE_MARKETPLACE_INFORMATION = "i:mp:information";
+    bytes32 constant CONTRACT_INTERACTIVE_IDENTITY = "i:identity";
+
+
+    
+    bytes32 constant CONTRACT_CONTROLLER_ASSETS = "c:asset";
+    bytes32 constant CONTRACT_CONTROLLER_ASSETS_RECAST = "c:asset:recast";
+    bytes32 constant CONTRACT_CONTROLLER_ASSETS_EXPLORER = "c:explorer";
+    bytes32 constant CONTRACT_CONTROLLER_DIGIX_DIRECTORY = "c:directory";
+    bytes32 constant CONTRACT_CONTROLLER_MARKETPLACE = "c:mp";
+    bytes32 constant CONTRACT_CONTROLLER_MARKETPLACE_ADMIN = "c:mpadmin";
+    bytes32 constant CONTRACT_CONTROLLER_PRODUCTS_LIST = "c:products";
+
+    bytes32 constant CONTRACT_CONTROLLER_TOKEN_APPROVAL = "c:token:approval";
+    bytes32 constant CONTRACT_CONTROLLER_TOKEN_CONFIG = "c:token:config";
+    bytes32 constant CONTRACT_CONTROLLER_TOKEN_INFO = "c:token:info";
+    bytes32 constant CONTRACT_CONTROLLER_TOKEN_TRANSFER = "c:token:transfer";
+
+    bytes32 constant CONTRACT_CONTROLLER_JOB_ID = "c:jobid";
+    bytes32 constant CONTRACT_CONTROLLER_IDENTITY = "c:identity";
+
+    
+    bytes32 constant CONTRACT_STORAGE_ASSETS = "s:asset";
+    bytes32 constant CONTRACT_STORAGE_ASSET_EVENTS = "s:asset:events";
+    bytes32 constant CONTRACT_STORAGE_DIGIX_DIRECTORY = "s:directory";
+    bytes32 constant CONTRACT_STORAGE_MARKETPLACE = "s:mp";
+    bytes32 constant CONTRACT_STORAGE_PRODUCTS_LIST = "s:products";
+    bytes32 constant CONTRACT_STORAGE_GOLD_TOKEN = "s:goldtoken";
+    bytes32 constant CONTRACT_STORAGE_JOB_ID = "s:jobid";
+    bytes32 constant CONTRACT_STORAGE_IDENTITY = "s:identity";
+
+    
+    bytes32 constant CONTRACT_SERVICE_TOKEN_DEMURRAGE = "sv:tdemurrage";
+    bytes32 constant CONTRACT_SERVICE_MARKETPLACE = "sv:mp";
+    bytes32 constant CONTRACT_SERVICE_DIRECTORY = "sv:directory";
+
+    
+    bytes32 constant CONTRACT_DEMURRAGE_FEES_DISTRIBUTOR = "fees:distributor:demurrage";
+    bytes32 constant CONTRACT_RECAST_FEES_DISTRIBUTOR = "fees:distributor:recast";
+    bytes32 constant CONTRACT_TRANSFER_FEES_DISTRIBUTOR = "fees:distributor:transfer";
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+contract AssetsStorage is ResolverClient, IndexedBytesIteratorStorage, BytesIteratorStorage, DigixConstants {
+
+  using StateMachine for StateMachine.System;
+  using DoublyLinkedList for DoublyLinkedList.IndexedBytes;
+  using DoublyLinkedList for DoublyLinkedList.Bytes;
+
+  struct Item {
+    uint256 product_id;
+    uint256 ng_weight;
+    uint256 effective_ng_weight;
+    bytes32 serial;
+    uint256 time_minted;
+    uint256 redeem_deadline;
+    address mint_target;
+    address redeem_for;
+    bytes32 replaced_by; 
+    bytes32 replaces; 
+  }
+
+  struct System {
+    StateMachine.System state_machine;
+    DoublyLinkedList.Bytes global_audit_documents;
+    DoublyLinkedList.IndexedBytes asset_documents;
+    DoublyLinkedList.IndexedBytes user_recasts;
+    mapping (bytes32 => Item) items_by_id;
+    uint256 last_global_audit_time;
+    uint256 redeem_period;              
+    
+    
+    
+    mapping (bytes32 => bytes32) last_asset_with_serial;
+  }
+
+  System system;
+
+  function AssetsStorage(address _resolver) public
+  {
+    require(init(CONTRACT_STORAGE_ASSETS, _resolver));
+    require(system.state_machine.init());
+    system.redeem_period = 31; 
+
+    
+    system.state_machine.set_role_name(ROLE_VENDOR, "vendor");
+    system.state_machine.set_role_name(ROLE_XFERAUTH, "xferauth");
+    system.state_machine.set_role_name(ROLE_POPADMIN, "popadmin");
+    system.state_machine.set_role_name(ROLE_CUSTODIAN, "custodian");
+    system.state_machine.set_role_name(ROLE_AUDITOR, "auditor");
+
+    
+    system.state_machine.set_state_name(STATE_CREATED, "created");
+    system.state_machine.set_state_name(STATE_VENDOR_ORDER, "vendor_order");
+    system.state_machine.set_state_name(STATE_TRANSFER, "transfer");
+    system.state_machine.set_state_name(STATE_CUSTODIAN_DELIVERY, "custodian_delivery");
+    system.state_machine.set_state_name(STATE_MINTED, "minted");
+    system.state_machine.set_state_name(STATE_AUDIT_FAILURE, "audit_failure");
+    system.state_machine.set_state_name(STATE_REPLACEMENT_ORDER, "replacement_order");
+    system.state_machine.set_state_name(STATE_REPLACEMENT_DELIVERY, "replacement_delivery");
+    system.state_machine.set_state_name(STATE_RECASTED, "recasted");
+    system.state_machine.set_state_name(STATE_REDEEMED, "redeemed");
+    system.state_machine.set_state_name(STATE_ADMIN_FAILURE, "admin_failure");
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_ZERO_UNDEFINED, STATE_CREATED);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_CREATED, STATE_VENDOR_ORDER);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_CREATED, STATE_TRANSFER);
+
+    
+    system.state_machine.grant_access(ROLE_VENDOR, STATE_VENDOR_ORDER, STATE_CUSTODIAN_DELIVERY);
+
+    
+    system.state_machine.grant_access(ROLE_XFERAUTH, STATE_TRANSFER, STATE_CUSTODIAN_DELIVERY);
+
+    
+    system.state_machine.grant_access(ROLE_CUSTODIAN, STATE_CUSTODIAN_DELIVERY, STATE_MINTED);
+
+    
+    system.state_machine.grant_access(ROLE_AUDITOR, STATE_MINTED, STATE_AUDIT_FAILURE);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_CREATED, STATE_REPLACEMENT_ORDER);
+
+    
+    system.state_machine.grant_access(ROLE_VENDOR, STATE_REPLACEMENT_ORDER, STATE_REPLACEMENT_DELIVERY);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_VENDOR_ORDER, STATE_ADMIN_FAILURE);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_TRANSFER, STATE_ADMIN_FAILURE);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_CUSTODIAN_DELIVERY, STATE_ADMIN_FAILURE);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_REPLACEMENT_ORDER, STATE_ADMIN_FAILURE);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_REPLACEMENT_DELIVERY, STATE_ADMIN_FAILURE);
+
+    
+    system.state_machine.grant_access(ROLE_CUSTODIAN, STATE_REPLACEMENT_DELIVERY, STATE_MINTED);
+
+    
+    system.state_machine.grant_access(ROLE_ZERO_ANYONE, STATE_MINTED, STATE_RECASTED);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_RECASTED, STATE_REDEEMED);
+
+    
+    system.state_machine.grant_access(ROLE_POPADMIN, STATE_RECASTED, STATE_MINTED);
+
+    
+    system.state_machine.grant_access(ROLE_KYC_RECASTER, STATE_RECASTED, STATE_MINTED);
+  }
+
+  function read_asset_info(bytes32 _item)
+           public
+           constant
+           returns (uint256 _product_id, uint256 _ng_weight, uint256 _effective_ng_weight,
+                    bytes32 _serial, uint256 _state_id, uint256 _documents_count, uint256 _time_minted, uint256 _redeem_deadline)
+  {
+    _product_id = system.items_by_id[_item].product_id;
+    _ng_weight = system.items_by_id[_item].ng_weight;
+    _effective_ng_weight = system.items_by_id[_item].effective_ng_weight;
+    _serial = system.items_by_id[_item].serial;
+    _state_id = system.state_machine.get_item_state_id(_item);
+    _documents_count = read_total_asset_documents(_item);
+    _time_minted = system.items_by_id[_item].time_minted;
+    _redeem_deadline = system.items_by_id[_item].redeem_deadline;
+  }
+
+  function read_last_asset_with_serial(bytes32 _serial)
+           public
+           constant
+           returns (bytes32 _asset_id)
+  {
+    _asset_id = system.last_asset_with_serial[_serial];
+  }
+
+  function read_asset_state(bytes32 _item)
+           public
+           constant
+           returns (uint256 _state_id)
+  {
+    _state_id = system.state_machine.get_item_state_id(_item);
+  }
+
+  function read_redeem_period()
+           public
+           constant
+           returns (uint256 _redeem_period)
+  {
+    _redeem_period = system.redeem_period;
+  }
+
+  function read_asset_details(bytes32 _item)
+           public
+           constant
+           returns (address _mint_target, address _redeem_for, bytes32 _replaced_by, bytes32 _replaces)
+  {
+    _mint_target = system.items_by_id[_item].mint_target;
+    _redeem_for = system.items_by_id[_item].redeem_for;
+    _replaced_by = system.items_by_id[_item].replaced_by;
+    _replaces = system.items_by_id[_item].replaces;
+  }
+
+  function read_last_global_audit_time()
+           public
+           constant
+           returns (uint256 _last_global_audit_time)
+  {
+    _last_global_audit_time = system.last_global_audit_time;
+  }
+
+  function read_state_name(uint256 _state_id)
+           public
+           constant
+           returns (bytes32 _state_name)
+  {
+    _state_name = system.state_machine.get_state_name(_state_id);
+  }
+
+  function read_item_state_name(bytes32 _item)
+           public
+           constant
+           returns (bytes32 _state_name)
+  {
+    _state_name = read_state_name(system.state_machine.get_item_state_id(_item));
+  }
+
+  function read_first_item_in_state(bytes32 _state_id)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = system.state_machine.get_first_in_state(uint256(_state_id));
+  }
+
+  function read_last_item_in_state(bytes32 _state_id)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = system.state_machine.get_last_in_state(uint256(_state_id));
+  }
+
+  function read_next_item_from_item_in_state(bytes32 _state_id, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = system.state_machine.get_next_from_in_state(uint256(_state_id), _current_item);
+  }
+
+  function read_previous_item_from_item_in_state(bytes32 _state_id, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = system.state_machine.get_previous_from_in_state(uint256(_state_id), _current_item);
+  }
+
+  function read_total_items_in_state(bytes32 _state_id)
+           public
+           constant
+           returns (uint256 _total_items)
+  {
+    _total_items = system.state_machine.total_in_state(uint256(_state_id));
+  }
+
+
+  function read_total_asset_documents(bytes32 _item)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = read_total_indexed_bytesarray(system.asset_documents, _item);
+  }
+
+  function read_first_asset_document(bytes32 _item)
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_first_from_indexed_bytesarray(system.asset_documents, _item);
+  }
+
+  function read_last_asset_document(bytes32 _item)
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_last_from_indexed_bytesarray(system.asset_documents, _item);
+  }
+
+  function read_next_asset_document_from_document(bytes32 _item, bytes32 _current_document)
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_next_from_indexed_bytesarray(system.asset_documents, _item, _current_document);
+  }
+
+
+  function read_previous_asset_document_from_document(bytes32 _item, bytes32 _current_document)
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_previous_from_indexed_bytesarray(system.asset_documents, _item, _current_document);
+  }
+
+  function read_first_global_audit()
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_first_from_bytesarray(system.global_audit_documents);
+  }
+
+  function read_last_global_audit()
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_last_from_bytesarray(system.global_audit_documents);
+  }
+
+  function read_next_global_audit_from_audit(bytes32 _current_document)
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_next_from_bytesarray(system.global_audit_documents, _current_document);
+  }
+
+
+  function read_previous_global_audit_from_audit(bytes32 _current_document)
+           public
+           constant
+           returns (bytes32 _document)
+  {
+    _document = read_previous_from_bytesarray(system.global_audit_documents, _current_document);
+  }
+
+  function read_total_global_audits()
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = system.global_audit_documents.total();
+  }
+
+  function read_user_first_recast(bytes32 _user)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = read_first_from_indexed_bytesarray(system.user_recasts, _user);
+  }
+
+  function read_user_last_recast(bytes32 _user)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = read_last_from_indexed_bytesarray(system.user_recasts, _user);
+  }
+
+  function read_user_next_recast_from_item(bytes32 _user, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = read_next_from_indexed_bytesarray(system.user_recasts, _user, _current_item);
+  }
+
+  function read_user_previous_recast_from_item(bytes32 _user, bytes32 _current_item)
+           public
+           constant
+           returns (bytes32 _item)
+  {
+    _item = read_previous_from_indexed_bytesarray(system.user_recasts, _user, _current_item);
+  }
+
+  function read_user_total_recasts(bytes32 _user)
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = read_total_indexed_bytesarray(system.user_recasts, _user);
+  }
+
+  function create_global_audit(bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success)
+  {
+    _success = system.global_audit_documents.append(_document);
+    require(_success);
+    system.last_global_audit_time = now;
+  }
+
+  
+  function create_init_item(uint256 _role_id, uint256 _product_id, uint256 _ng_weight, uint256 _effective_ng_weight, address _mint_target)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success, bytes32 _item)
+  {
+    (_success, _item) = system.state_machine.create_item(_role_id);
+    require(_success);
+    system.state_machine.change_item_state(_role_id, _item, STATE_VENDOR_ORDER);
+    system.items_by_id[_item].product_id = _product_id;
+    system.items_by_id[_item].ng_weight = _ng_weight;
+    system.items_by_id[_item].effective_ng_weight = _effective_ng_weight;
+    system.items_by_id[_item].mint_target = _mint_target;
+  }
+
+  
+  function create_init_item_transfer(uint256 _role_id, uint256 _product_id, uint256 _ng_weight, uint256 _effective_ng_weight, address _mint_target)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success, bytes32 _item)
+  {
+    (_success, _item) = system.state_machine.create_item(_role_id);
+    require(_success);
+    system.state_machine.change_item_state(_role_id, _item, STATE_TRANSFER);
+    system.items_by_id[_item].product_id = _product_id;
+    system.items_by_id[_item].ng_weight = _ng_weight;
+    system.items_by_id[_item].effective_ng_weight = _effective_ng_weight;
+    system.items_by_id[_item].mint_target = _mint_target;
+  }
+
+  function internal_check_duplicate_serial_when_fulfilling_order(bytes32 _item, bytes32 _serial)
+           internal
+  {
+    bytes32 _last_asset_with_same_serial = system.last_asset_with_serial[_serial];
+    if (_last_asset_with_same_serial != bytes32(0x0)) {
+      uint256 _existing_asset_state_id = system.state_machine.get_item_state_id(_last_asset_with_same_serial);
+      require(_existing_asset_state_id == STATE_ADMIN_FAILURE
+        || _existing_asset_state_id == STATE_AUDIT_FAILURE
+        || _existing_asset_state_id == STATE_REDEEMED);
+    }
+    system.last_asset_with_serial[_serial] = _item;
+  }
+
+  
+  function update_item_fulfill(uint256 _role_id, bytes32 _item, bytes32 _serial, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success, uint256 _from_state, uint256 _new_state)
+  {
+    (_success, _from_state, _new_state) = system.state_machine.change_item_state(_role_id, _item, STATE_CUSTODIAN_DELIVERY);
+    require(_success);
+    internal_check_duplicate_serial_when_fulfilling_order(_item, _serial);
+    system.asset_documents.append(_item, _document);
+    system.items_by_id[_item].serial = _serial;
+  }
+
+  
+  function update_item_mint(uint256 _role_id, bytes32 _item, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success, address _mint_target, uint256 _effective_ng_weight, uint256 _from_state, uint256 _new_state)
+  {
+    _mint_target = system.items_by_id[_item].mint_target;
+    _effective_ng_weight = system.items_by_id[_item].effective_ng_weight;
+    (_success, _from_state, _new_state) = system.state_machine.change_item_state(_role_id, _item, STATE_MINTED);
+    require(_success);
+    system.items_by_id[_item].time_minted = now;
+    system.asset_documents.append(_item, _document);
+  }
+
+  
+  function update_item_recast(uint256 _role_id, bytes32 _item, address _redeem_for, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS_RECAST)
+           returns (bool _success)
+  {
+    (_success,,) = system.state_machine.change_item_state(_role_id, _item, STATE_RECASTED);
+    require(_success);
+    system.items_by_id[_item].redeem_for = _redeem_for;
+    system.items_by_id[_item].redeem_deadline = now + system.redeem_period * SECONDS_IN_A_DAY;
+    system.user_recasts.append(bytes32(_redeem_for), _item);
+    system.asset_documents.append(_item, _document);
+  }
+
+  
+  function update_item_redeem(uint256 _role_id, bytes32 _item, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success)
+  {
+    (_success,,) = system.state_machine.change_item_state(_role_id, _item, STATE_REDEEMED);
+    require(_success);
+    address _redeem_for = system.items_by_id[_item].redeem_for;
+    system.user_recasts.remove_item(bytes32(_redeem_for), _item);
+    system.asset_documents.append(_item, _document);
+  }
+
+  
+  function update_item_remint(uint256 _role_id, bytes32 _item, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success)
+  {
+    (_success,,) = system.state_machine.change_item_state(_role_id, _item, STATE_MINTED);
+    require(_success);
+    address _redeem_for = system.items_by_id[_item].redeem_for;
+    system.user_recasts.remove_item(bytes32(_redeem_for), _item);
+    system.items_by_id[_item].redeem_for = address(0x0); 
+    system.asset_documents.append(_item, _document);
+  }
+
+  function update_item_to_audit_failure(uint256 _role_id, bytes32 _item, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success, uint256 _from_state, uint256 _new_state)
+  {
+    (_success, _from_state, _new_state) = system.state_machine.change_item_state(_role_id, _item, STATE_AUDIT_FAILURE);
+    require(_success);
+    system.asset_documents.append(_item, _document);
+  }
+
+  
+  function create_init_item_as_replacement(uint256 _role_id, uint256 _product_id, uint256 _ng_weight, uint256 _effective_ng_weight, bytes32 _old_item)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success, bytes32 _replacement_item)
+  {
+    (_success, _replacement_item) = system.state_machine.create_item(_role_id);
+    require(_success);
+    system.state_machine.change_item_state(_role_id, _replacement_item, STATE_REPLACEMENT_ORDER);
+    system.items_by_id[_replacement_item].product_id = _product_id;
+    system.items_by_id[_replacement_item].ng_weight = _ng_weight;
+    system.items_by_id[_replacement_item].effective_ng_weight = _effective_ng_weight;
+    system.items_by_id[_replacement_item].replaces = _old_item;
+    system.items_by_id[_old_item].replaced_by = _replacement_item;
+  }
+
+  
+  function update_item_fulfill_replacement(uint256 _role_id, bytes32 _item, bytes32 _serial, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success)
+  {
+    (_success,,) = system.state_machine.change_item_state(_role_id, _item, STATE_REPLACEMENT_DELIVERY);
+    require(_success);
+    internal_check_duplicate_serial_when_fulfilling_order(_item, _serial);
+    system.asset_documents.append(_item, _document);
+    system.items_by_id[_item].serial = _serial;
+  }
+
+  
+  function update_item_mint_replacement(uint256 _role_id, bytes32 _item, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success, uint256 _effective_ng_weight)
+  {
+    _effective_ng_weight = system.items_by_id[_item].effective_ng_weight;
+    (_success,,) = system.state_machine.change_item_state(_role_id, _item, STATE_MINTED);
+    require(_success);
+    system.items_by_id[_item].time_minted = now;
+    system.asset_documents.append(_item, _document);
+  }
+
+  
+  function update_item_admin_fail(uint256 _role_id, bytes32 _item, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success)
+  {
+    (_success,,) = system.state_machine.change_item_state(_role_id, _item, STATE_ADMIN_FAILURE);
+    require(_success);
+    system.asset_documents.append(_item, _document);
+  }
+
+  function update_item_add_document(bytes32 _item, bytes32 _document)
+           public
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           returns (bool _success)
+  {
+    _success = system.asset_documents.append(_item, _document);
+    require(_success);
+  }
+
+  function update_redeem_period(uint256 _redeem_period)
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           public
+           returns (bool _success)
+  {
+    system.redeem_period = _redeem_period;
+    _success = true;
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract AssetEventsStorage is ResolverClient, DigixConstants {
+  struct PoPEvent {
+    uint256 event_type;
+    uint256 timestamp;
+  }
+
+  struct AssetEventsData {
+    PoPEvent[] events;
+    uint256 count;
+  }
+
+  mapping(bytes32 => AssetEventsData) system;
+
+  function AssetEventsStorage(address _resolver) public
+  {
+    require(init(CONTRACT_STORAGE_ASSET_EVENTS, _resolver));
+  }
+
+  function add_asset_event(bytes32 _asset_item, uint256 _event_type)
+           public
+           returns (bool _success)
+  {
+    require(msg.sender == get_contract(CONTRACT_CONTROLLER_ASSETS) || msg.sender == get_contract(CONTRACT_CONTROLLER_ASSETS_RECAST));
+    uint256 _event_count = system[_asset_item].count;
+    system[_asset_item].events.push(PoPEvent(_event_type, now));
+    system[_asset_item].count = _event_count + 1;
+    _success = true;
+  }
+
+  function read_asset_events_count(bytes32 _asset_item)
+           public
+           constant
+           returns (uint256 _count)
+  {
+    _count = system[_asset_item].count;
+  }
+
+  function read_asset_event_details(bytes32 _asset_item, uint256 _index)
+           public
+           constant
+           returns (uint256 _event_type, uint256 _timestamp)
+  {
+    _event_type = system[_asset_item].events[_index].event_type;
+    _timestamp = system[_asset_item].events[_index].timestamp;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract GoldTokenStorage is ResolverClient, DigixConstants {
+
+  struct FeeConfiguration {
+    uint256 base;
+    uint256 rate;
+  }
+
+  struct GlobalConfig {
+    bytes32 current_version;
+    bool no_demurrage_fee;
+    bool no_transfer_fee;
+    uint256 minimum_transfer_amount;
+    Fees fees;
+  }
+
+  struct Fees {
+    FeeConfiguration demurrage;
+    FeeConfiguration recast;
+    FeeConfiguration transfer;
+  }
+
+  struct Collectors {
+    address demurrage;
+    address recast;
+    address transfer;
+  }
+
+  struct UserConfig {
+    bool no_demurrage_fee;
+    bool no_transfer_fee;
+    bool no_recast_fee;
+  }
+
+  struct UserData {
+    uint256 last_payment_date;
+    uint256 raw_balance;
+    mapping (address => uint256) spender_allowances;
+  }
+
+  struct User {
+    UserConfig config;
+    UserData data;
+  }
+
+  struct System {
+    Collectors collectors;
+    GlobalConfig config;
+    uint256 total_supply;
+    uint256 effective_total_supply;
+    mapping (address => User) users;
+  }
+
+  System system;
+
+  function GoldTokenStorage(address _resolver) public
+  {
+    require(init(CONTRACT_STORAGE_GOLD_TOKEN, _resolver));
+
+    address _demurrage_collector;
+    address _transfer_collector;
+    address _recast_collector;
+
+    assembly {
+      _demurrage_collector := create(0,0,0)
+      _transfer_collector := create(0,0,0)
+      _recast_collector := create(0,0,0)
+    }
+    system.collectors.demurrage = _demurrage_collector;
+    system.collectors.recast = _recast_collector;
+    system.collectors.transfer = _transfer_collector;
+    system.config.fees.demurrage.base = 10000000;
+    system.config.fees.demurrage.rate = 165;
+    system.config.fees.recast.base = 100000000000;
+    system.config.fees.recast.rate = 1000000000;
+    system.config.fees.transfer.base = 10000;
+    system.config.fees.transfer.rate = 13;
+    system.config.minimum_transfer_amount = 1000000;
+    system.config.no_demurrage_fee = false;
+    system.config.no_transfer_fee = false;
+    system.config.current_version = "1.0.0";
+    system.total_supply = 0;
+    system.effective_total_supply = 0;
+  }
+
+
+ 
+
+
+
+  
+  function read_total_supply()
+           constant
+           public
+           returns (uint256 _total_supply)
+  {
+    _total_supply = system.total_supply;
+  }
+
+  
+  function read_effective_total_supply()
+           constant
+           public
+           returns (uint256 _effective_total_supply)
+  {
+    _effective_total_supply = system.effective_total_supply;
+  }
+
+  
+  function read_supply()
+           constant
+           public
+           returns (uint256 _total_supply, uint256 _effective_total_supply)
+  {
+    _total_supply = read_total_supply();
+    _effective_total_supply = read_effective_total_supply();
+  }
+
+  
+  function read_general_config()
+           constant
+           public
+           returns (bytes32 _current_version, bool _no_demurrage_fee, bool _no_transfer_fee, uint256 _minimum_transfer_amount)
+  {
+    _current_version = system.config.current_version;
+    _no_demurrage_fee = system.config.no_demurrage_fee;
+    _no_transfer_fee = system.config.no_transfer_fee;
+    _minimum_transfer_amount = system.config.minimum_transfer_amount;
+  }
+
+  function read_collectors_addresses()
+           constant
+           public
+           returns (address[3] _collectors)
+  {
+    
+    _collectors[0] = system.collectors.demurrage;
+    _collectors[1] = system.collectors.recast;
+    _collectors[2] = system.collectors.transfer;
+  }
+
+
+ 
+
+
+
+  
+  function read_user(address _account)
+           public
+           constant
+           returns (bool _exists,
+                    uint256 _raw_balance,
+                    uint256 _payment_date,
+                    bool _no_demurrage_fee,
+                    bool _no_recast_fee,
+                    bool _no_transfer_fee)
+  {
+    _exists = (system.users[_account].data.last_payment_date > 0);
+    _raw_balance = system.users[_account].data.raw_balance;
+    _payment_date = system.users[_account].data.last_payment_date;
+    (_no_demurrage_fee, _no_transfer_fee, _no_recast_fee) = read_user_fees_configs(_account);
+  }
+
+  function read_user_fees_configs(address _account)
+           public
+           constant
+           returns (bool _no_demurrage_fee,
+                    bool _no_transfer_fee,
+                    bool _no_recast_fee)
+  {
+    _no_demurrage_fee = system.users[_account].config.no_demurrage_fee;
+    _no_transfer_fee = system.users[_account].config.no_transfer_fee;
+    _no_recast_fee = system.users[_account].config.no_recast_fee;
+  }
+
+  
+  function read_account_spender_allowance(address _account,
+                                          address _spender)
+           public
+           constant
+           returns (uint256 _spender_allowance)
+  {
+    _spender_allowance = system.users[_account].data.spender_allowances[_spender];
+  }
+
+
+ 
+
+
+
+  
+  function update_account_spender_allowance(address _account,
+                                            address _spender,
+                                            uint256 _new_allowance)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_APPROVAL)
+           public
+           returns (bool _success)
+  {
+    system.users[_account].data.spender_allowances[_spender] = _new_allowance;
+    _success = true;
+  }
+
+  
+  function update_balances_after_mint(address _user, uint256 _user_new_balance, uint256 _new_total_supply, uint256 _new_effective_total_supply)
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           public
+           returns (bool _success)
+  {
+    system.users[_user].data.raw_balance = _user_new_balance;
+    system.total_supply = _new_total_supply;
+    system.effective_total_supply = _new_effective_total_supply;
+    _success = true;
+  }
+
+  
+  function update_user_fees_configs(address _user, bool _no_demurrage_fee, bool _no_transfer_fee, bool _no_recast_fee)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_CONFIG)
+           public
+           returns (bool _success)
+  {
+    system.users[_user].config.no_demurrage_fee = _no_demurrage_fee;
+    system.users[_user].config.no_transfer_fee = _no_transfer_fee;
+    system.users[_user].config.no_recast_fee = _no_recast_fee;
+    _success = true;
+  }
+
+
+ 
+
+
+
+  
+  function update_effective_supply(uint256 _effective_total_supply)
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           public
+           returns (bool _success)
+  {
+    system.effective_total_supply = _effective_total_supply;
+    _success = true;
+  }
+
+  
+  function update_config_recast(uint256 _base, uint256 _rate)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_CONFIG)
+           public
+           returns (bool _success)
+  {
+    system.config.fees.recast.base = _base;
+    system.config.fees.recast.rate = _rate;
+    _success = true;
+  }
+
+  
+  function update_config_demurrage(uint256 _base, uint256 _rate, bool _no_demurrage_fee)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_CONFIG)
+           public
+           returns (bool _success)
+  {
+    system.config.fees.demurrage.base = _base;
+    system.config.fees.demurrage.rate = _rate;
+    system.config.no_demurrage_fee = _no_demurrage_fee;
+    _success = true;
+  }
+
+  
+  function update_config_transfer(uint256 _base, uint256 _rate, bool _no_transfer_fee, uint256 _minimum_transfer_amount)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_CONFIG)
+           public
+           returns (bool _success)
+  {
+    system.config.fees.transfer.base = _base;
+    system.config.fees.transfer.rate = _rate;
+    system.config.no_transfer_fee = _no_transfer_fee;
+    system.config.minimum_transfer_amount = _minimum_transfer_amount;
+    _success = true;
+  }
+
+
+ 
+
+
+
+  
+  function read_demurrage_config()
+           constant
+           public
+           returns (uint256 _collector_balance,
+                    uint256 _base,
+                    uint256 _rate,
+                    address _collector)
+  {
+    _collector_balance = system.users[system.collectors.demurrage].data.raw_balance;
+    bool _global_demurrage_disabled = system.config.no_demurrage_fee;
+    _collector = system.collectors.demurrage;
+
+    if (_global_demurrage_disabled) {
+      _base = 0;
+      _rate = 0;
+    } else {
+      _base = system.config.fees.demurrage.base;
+      _rate = system.config.fees.demurrage.rate;
+    }
+  }
+
+  function read_demurrage_config_underlying()
+           public
+           constant
+           returns (uint256 _base,
+                    uint256 _rate,
+                    address _collector,
+                    bool _no_demurrage_fee)
+  {
+    _base = system.config.fees.demurrage.base;
+    _rate = system.config.fees.demurrage.rate;
+    _collector = system.collectors.demurrage;
+    _no_demurrage_fee = system.config.no_demurrage_fee;
+  }
+
+  
+  function read_user_for_demurrage(address _account)
+           public
+           constant
+           returns (uint256 _raw_balance, uint256 _payment_date, bool _no_demurrage_fee)
+  {
+    _raw_balance = system.users[_account].data.raw_balance;
+    _payment_date = system.users[_account].data.last_payment_date;
+    _no_demurrage_fee = system.users[_account].config.no_demurrage_fee || system.config.no_demurrage_fee;
+  }
+
+  
+  function update_user_for_demurrage(address _user, uint256 _user_new_balance, uint256 _user_new_payment_date, uint256 _collector_new_balance)
+           if_sender_is(CONTRACT_SERVICE_TOKEN_DEMURRAGE)
+           public
+           returns (bool _success)
+  {
+    system.users[system.collectors.demurrage].data.raw_balance = _collector_new_balance;
+    system.users[_user].data.raw_balance = _user_new_balance;
+    system.users[_user].data.last_payment_date = _user_new_payment_date;
+    _success = true;
+  }
+
+
+ 
+
+
+
+  
+  function read_recast_config()
+           constant
+           public
+           returns (uint256 _base,
+                    uint256 _rate,
+                    uint256 _total_supply,
+                    uint256 _effective_total_supply,
+                    address _collector,
+                    uint256 _collector_balance)
+  {
+    _base = system.config.fees.recast.base;
+    _rate = system.config.fees.recast.rate;
+    _total_supply = system.total_supply;
+    _effective_total_supply = system.effective_total_supply;
+    _collector = system.collectors.recast;
+    _collector_balance = system.users[system.collectors.recast].data.raw_balance;
+  }
+
+  
+  function read_user_for_recast(address _account)
+           public
+           constant
+           returns (uint256 _raw_balance, bool _no_recast_fee)
+  {
+    _raw_balance = system.users[_account].data.raw_balance;
+    _no_recast_fee = system.users[_account].config.no_recast_fee;
+  }
+
+  
+  function update_balances_after_recast(address _recaster,
+                               uint256 _recaster_new_balance,
+                               uint256 _recast_fee_collector_new_balance,
+                               uint256 _new_total_supply,
+                               uint256 _new_effective_total_supply)
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS_RECAST)
+           public
+           returns (bool _success)
+  {
+    system.users[_recaster].data.raw_balance = _recaster_new_balance;
+    system.users[system.collectors.recast].data.raw_balance = _recast_fee_collector_new_balance;
+    system.total_supply = _new_total_supply;
+    system.effective_total_supply = _new_effective_total_supply;
+    _success = true;
+  }
+
+
+ 
+
+
+
+  
+  function read_transfer_config()
+           public
+           constant
+           returns (uint256 _collector_balance,
+                    uint256 _base,
+                    uint256 _rate,
+                    address _collector,
+                    bool _no_transfer_fee,
+                    uint256 _minimum_transfer_amount)
+  {
+    _collector_balance = system.users[system.collectors.transfer].data.raw_balance;
+    _base = system.config.fees.transfer.base;
+    _rate = system.config.fees.transfer.rate;
+    _collector = system.collectors.transfer;
+    _no_transfer_fee = system.config.no_transfer_fee;
+    _minimum_transfer_amount = system.config.minimum_transfer_amount;
+  }
+
+  
+  function read_user_for_transfer(address _account)
+           public
+           constant
+           returns (uint256 _raw_balance, bool _no_transfer_fee)
+  {
+    _raw_balance = system.users[_account].data.raw_balance;
+    _no_transfer_fee = system.users[_account].config.no_transfer_fee;
+  }
+
+  
+  function update_transfer_balance(address _sender, uint256 _sender_new_balance, address _recipient,
+                                   uint256 _recipient_new_balance, uint256 _transfer_fee_collector_new_balance)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_TRANSFER)
+           public
+           returns (bool _success)
+  {
+    system.users[_sender].data.raw_balance = _sender_new_balance;
+    system.users[_recipient].data.raw_balance = _recipient_new_balance;
+    system.users[system.collectors.transfer].data.raw_balance = _transfer_fee_collector_new_balance;
+    _success = true;
+  }
+
+  
+  function update_transfer_from_balance(address _sender, uint256 _sender_new_balance, address _recipient,
+                                        uint256 _recipient_new_balance, uint256 _transfer_fee_collector_new_balance,
+                                        address _spender, uint256 _spender_new_allowance)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_TRANSFER)
+           public
+           returns (bool _success)
+  {
+    system.users[_sender].data.raw_balance = _sender_new_balance;
+    system.users[_recipient].data.raw_balance = _recipient_new_balance;
+    system.users[system.collectors.transfer].data.raw_balance = _transfer_fee_collector_new_balance;
+    system.users[_sender].data.spender_allowances[_spender] = _spender_new_allowance;
+    _success = true;
+  }
+
+  
+ 
+ 
+  function internal_move_balance(address _from, address _to)
+           internal
+           returns (uint256 _fees)
+  {
+    _fees = system.users[_from].data.raw_balance;
+    system.users[_to].data.raw_balance += _fees;
+    system.users[_from].data.raw_balance = 0;
+  }
+
+  function move_fees_to_distributors(address _demurrage_fees_distributor, address _recast_fees_distributor, address _transfer_fees_distributor)
+          if_sender_is(CONTRACT_CONTROLLER_TOKEN_CONFIG)
+          public
+          returns (bool _success, uint256[3] _fees_array)
+  {
+    
+    _fees_array[0] = internal_move_balance(system.collectors.demurrage, _demurrage_fees_distributor);
+    _fees_array[1] = internal_move_balance(system.collectors.recast, _recast_fees_distributor);
+    _fees_array[2] = internal_move_balance(system.collectors.transfer, _transfer_fees_distributor);
+    _success = true;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract IdentityStorage is ResolverClient, DigixConstants {
+
+  struct User {
+    uint256 id_expiration;
+    bytes32 doc;  
+  }
+
+  mapping(address => User) users;
+
+  function IdentityStorage(address _resolver) public
+  {
+    require(init(CONTRACT_STORAGE_IDENTITY, _resolver));
+  }
+
+  function read_user(address _user)
+           public
+           constant
+           returns (uint256 _id_expiration, bytes32 _doc)
+  {
+    _id_expiration = users[_user].id_expiration;
+    _doc = users[_user].doc;
+  }
+
+  function read_user_kyc_valid(address _user)
+           public
+           constant
+           returns (bool _kyc_valid)
+  {
+    _kyc_valid = users[_user].id_expiration > now;
+  }
+
+  function update_user_id_expiration(address _user, uint256 _id_expiration)
+           if_sender_is(CONTRACT_CONTROLLER_IDENTITY)
+           public
+           returns (bool _success)
+  {
+    users[_user].id_expiration = _id_expiration;
+    _success = true;
+  }
+
+  function update_user_doc(address _user, bytes32 _doc)
+           if_sender_is(CONTRACT_CONTROLLER_IDENTITY)
+           public
+           returns (bool _success)
+  {
+    users[_user].doc = _doc;
+    _success = true;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+library MathUtils {
+
+  
+
+  
+
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  function add(uint256 _a, uint256 _b)
+           public
+           pure
+           returns (uint256 _result)
+  {
+    _result = _a + _b;
+    require(_result > _a);
+  }
+
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  function subtract(uint256 _a, uint256 _b)
+           public
+           pure
+           returns (uint _result)
+  {
+    require(_a >= _b);
+    _result = _a - _b;
+  }
+
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
+  
+
+  function calculate_recast_fee(uint256 _asset_weight, uint256 _unit_size, uint256 _fee_per_unit)
+           public
+           pure
+           returns (uint256 _recast_fee)
+  {
+    uint256 _weight_times_fee_per_unit = _asset_weight * _fee_per_unit;
+    require(_weight_times_fee_per_unit / _asset_weight == _fee_per_unit);
+    _recast_fee = _weight_times_fee_per_unit / _unit_size;
+    return _recast_fee;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+library Types {
+
+  struct MutableUint {
+    uint256 pre;
+    uint256 post;
+  }
+
+  struct MutableTimestamp {
+    MutableUint time;
+    uint256 in_units;
+  }
+
+  function advance_by(MutableTimestamp memory _original, uint256 _units)
+           internal
+           constant
+           returns (MutableTimestamp _transformed)
+  {
+    _transformed = _original;
+    require(now >= _original.time.pre);
+    uint256 _lapsed = now - _original.time.pre;
+    _transformed.in_units = _lapsed / _units;
+    uint256 _ticks = _transformed.in_units * _units;
+    if (_transformed.in_units == 0) {
+      _transformed.time.post = _original.time.pre;
+    } else {
+      _transformed.time = add(_transformed.time, _ticks);
+    }
+  }
+
+  
+  
+
+  function subtract_two(MutableUint memory _original, uint256 _first, uint256 _second)
+           internal
+           pure
+           returns (MutableUint _transformed)
+  {
+    require(_original.pre >= _first);
+    uint256 _after_first = _original.pre - _first;
+    require(_after_first >= _second);
+    _transformed = _original;
+    _original.post = (_after_first - _second);
+  }
+
+  function subtract_and_add(MutableUint memory _original, uint256 _to_subtract, uint256 _to_add)
+           internal
+           pure
+           returns (MutableUint _transformed)
+  {
+    require(_original.pre >= _to_subtract);
+    uint256 _after_subtract = _original.pre - _to_subtract;
+    require((_after_subtract + _to_add) >= _after_subtract);
+    _transformed.post = _after_subtract + _to_add;
+  }
+
+  
+  
+
+  
+  
+
+  function add_and_subtract(MutableUint memory _original, uint256 _to_add, uint256 _to_subtract)
+           internal
+           pure
+           returns (MutableUint _transformed)
+  {
+    require((_original.pre + _to_add) >= _original.pre);
+    uint256 _after_add = _original.pre + _to_add;
+    require(_after_add >= _to_subtract);
+    _transformed = _original;
+    _transformed.post = (_after_add - _to_subtract);
+  }
+
+  function add(MutableUint memory _original, uint256 _amount)
+           internal
+           pure
+           returns (MutableUint _transformed)
+  {
+    require((_original.pre + _amount) >= _original.pre);
+    _transformed = _original;
+    _transformed.post = _original.pre + _amount;
+  }
+
+  function subtract(MutableUint memory _original, uint256 _amount)
+           internal
+           pure
+           returns (MutableUint _transformed)
+  {
+    require(_amount <= _original.pre);
+    _transformed = _original;
+    _transformed.post = _original.pre - _amount;
+  }
+
+  function swap(MutableUint memory _original_a, MutableUint memory _original_b)
+           internal
+           pure
+           returns (MutableUint _transformed_a, MutableUint _transformed_b)
+  {
+    _transformed_a = _original_a;
+    _transformed_b = _original_b;
+    _transformed_a.post = _original_b.pre;
+    _transformed_b.post = _original_a.pre;
+  }
+
+  
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract TokenLoggerCallback is ResolverClient, DigixConstants {
+
+  event Transfer(address indexed _from,  address indexed _to,  uint256 _value);
+  event Approval(address indexed _owner,  address indexed _spender,  uint256 _value);
+
+  function log_mint(address _to, uint256 _value)
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS)
+           public
+  {
+    Transfer(address(0x0), _to, _value);
+  }
+
+  function log_recast_fees(address _from, address _to, uint256 _value)
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS_RECAST)
+           public
+  {
+    Transfer(_from, _to, _value);
+  }
+
+  function log_recast(address _from, uint256 _value)
+           if_sender_is(CONTRACT_CONTROLLER_ASSETS_RECAST)
+           public
+  {
+    Transfer(_from, address(0x0), _value);
+  }
+
+  function log_demurrage_fees(address _from, address _to, uint256 _value)
+           if_sender_is(CONTRACT_SERVICE_TOKEN_DEMURRAGE)
+           public
+  {
+    Transfer(_from, _to, _value);
+  }
+
+  function log_move_fees(address _from, address _to, uint256 _value)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_CONFIG)
+           public
+  {
+    Transfer(_from, _to, _value);
+  }
+
+  function log_transfer(address _from, address _to, uint256 _value)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_TRANSFER)
+           public
+  {
+    Transfer(_from, _to, _value);
+  }
+
+  function log_approve(address _owner, address _spender, uint256 _value)
+           if_sender_is(CONTRACT_CONTROLLER_TOKEN_APPROVAL)
+           public
+  {
+    Approval(_owner, _spender, _value);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+contract TokenDemurrageService is ResolverClient, DigixConstants {
+
+  using Types for Types.MutableUint;
+  using Types for Types.MutableTimestamp;
+
+  struct User {
+    address account;
+    bool no_demurrage_fee;
+    Types.MutableUint balance;
+    Types.MutableTimestamp payment_date;
+  }
+
+  struct Config {
+    Types.MutableUint collector_balance;
+    uint256 base;
+    uint256 rate;
+    address collector;
+  }
+
+  struct Demurrage {
+    Config config;
+    User user;
+    uint256 collected_fee;
+  }
+
+  function TokenDemurrageService(address _resolver) public
+  {
+    require(init(CONTRACT_SERVICE_TOKEN_DEMURRAGE, _resolver));
+  }
+
+  function gold_token_storage()
+           internal
+           constant
+           returns (GoldTokenStorage _contract)
+  {
+    _contract = GoldTokenStorage(get_contract(CONTRACT_STORAGE_GOLD_TOKEN));
+  }
+
+  function get_demurrage_data(address _user)
+           internal
+           constant
+           returns (Demurrage _demurrage)
+  {
+    (_demurrage.config.collector_balance.pre, _demurrage.config.base, _demurrage.config.rate, _demurrage.config.collector) =
+      gold_token_storage().read_demurrage_config();
+    _demurrage.user.account = _user;
+    (_demurrage.user.balance.pre, _demurrage.user.payment_date.time.pre, _demurrage.user.no_demurrage_fee) = gold_token_storage().read_user_for_demurrage(_user);
+  }
+
+  function calculate_demurrage(Demurrage memory _demurrage)
+           internal
+           constant
+           returns (Demurrage _calculated)
+  {
+    if (_demurrage.user.payment_date.time.pre == 0) {
+      _demurrage.user.payment_date.time.pre = now;
+    }
+    if (_demurrage.user.no_demurrage_fee == true || _demurrage.user.account == _demurrage.config.collector) { 
+      _demurrage.user.balance.post = _demurrage.user.balance.pre;
+      _demurrage.config.collector_balance.post = _demurrage.config.collector_balance.pre;
+      _demurrage.user.payment_date.time.post = now;
+    } else {
+      _demurrage.user.payment_date = _demurrage.user.payment_date.advance_by(1 days);
+      if (_demurrage.user.payment_date.in_units == 0) {
+        _demurrage.user.balance.post = _demurrage.user.balance.pre;
+        _demurrage.config.collector_balance.post = _demurrage.config.collector_balance.pre;
+      } else {
+        _demurrage.collected_fee = (_demurrage.user.payment_date.in_units * _demurrage.user.balance.pre * _demurrage.config.rate) / _demurrage.config.base;
+        _demurrage.user.balance = _demurrage.user.balance.subtract(_demurrage.collected_fee);
+        _demurrage.config.collector_balance = _demurrage.config.collector_balance.add(_demurrage.collected_fee);
+      }
+    }
+    _calculated = _demurrage;
+  }
+
+  function show_demurraged_balance(address _user)
+           public
+           constant
+           returns ( uint256 _actual_balance)
+  {
+    Demurrage memory _demurrage = get_demurrage_data(_user);
+    _demurrage = calculate_demurrage(_demurrage);
+    _actual_balance = _demurrage.user.balance.post;
+  }
+
+  function deduct_demurrage(address _user)
+           public
+           returns (bool _success)
+  {
+    Demurrage memory _demurrage = get_demurrage_data(_user);
+    _demurrage = calculate_demurrage(_demurrage);
+    require(gold_token_storage().update_user_for_demurrage(_demurrage.user.account, _demurrage.user.balance.post, _demurrage.user.payment_date.time.post, _demurrage.config.collector_balance.post) == true);
+    if (_demurrage.collected_fee > 0) {
+      TokenLoggerCallback(get_contract(CONTRACT_INTERACTIVE_TOKEN)).log_demurrage_fees(_user, _demurrage.config.collector, _demurrage.collected_fee);
+    }
+    _success = true;
+  }
+
+  function bulk_deduct_demurrage(address[] _users)
+           public
+           returns (bool _success)
+  {
+    uint256 _length = _users.length;
+    for (uint256 i=0;i<_length; i++) {
+      deduct_demurrage(_users[i]);
+    }
+    _success = true;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+contract ERCTwenty {
+  function decimals() constant public returns (uint _decimals);
+  function totalSupply() constant public returns (uint supply);
+  function balanceOf( address who ) constant public returns (uint value);
+  function allowance( address owner, address spender ) constant public returns (uint _allowance);
+  function transfer( address to, uint value) public returns (bool ok);
+  function transferFrom( address from, address to, uint value) public returns (bool ok);
+  function approve( address spender, uint value ) public returns (bool ok);
+  event Transfer( address indexed from, address indexed to, uint value);
+  event Approval( address indexed owner, address indexed spender, uint value);
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+contract MarketplaceStorage is ResolverClient, DigixConstants {
+
+  struct Config {
+    uint256 global_daily_dgx_ng_limit;
+    uint256 minimum_purchase_dgx_ng;
+    uint256 maximum_block_drift;
+    address payment_collector;
+    uint256 max_dgx_available_daily;
+    uint256 price_floor_wei_per_dgx_mg;
+  }
+
+  struct Purchase {
+    address recipient; 
+    uint256 timestamp;
+    uint256 amount;
+    uint256 price;
+  }
+
+  struct User {
+    uint256 overwrite_daily_dgx_ng_limit;
+    Purchase[] purchases;
+  }
+
+  struct Marketplace {
+    Config config;
+    Purchase[] purchases;
+    mapping (address => User) users;
+    mapping (address => bool) approved_signers;
+    mapping (uint => mapping (uint => bool)) used_nonces;
+  }
+
+  Marketplace marketplace;
+
+  function MarketplaceStorage(address _resolver) public
+  {
+    require(init(CONTRACT_STORAGE_MARKETPLACE, _resolver));
+    marketplace.config.global_daily_dgx_ng_limit = 102000000000;
+    marketplace.config.minimum_purchase_dgx_ng = 10000000;
+  }
+
+  function token_contract()
+           internal
+           constant
+           returns (ERCTwenty _contract)
+  {
+    _contract = ERCTwenty(get_contract(CONTRACT_INTERACTIVE_TOKEN));
+  }
+
+  function read_total_number_of_purchases()
+           public
+           constant
+           returns (uint256 _total_number_of_purchases)
+  {
+    _total_number_of_purchases = marketplace.purchases.length;
+  }
+
+  function read_total_number_of_user_purchases(address _user)
+           public
+           constant
+           returns (uint256 _total_number_of_user_purchases)
+  {
+    _total_number_of_user_purchases = marketplace.users[_user].purchases.length;
+  }
+
+  function read_purchase_at_index(uint256 _index)
+           public
+           constant
+           returns (address _recipient, uint256 _timestamp, uint256 _amount, uint256 _price)
+  {
+    Purchase memory _purchase = marketplace.purchases[_index];
+    _recipient = _purchase.recipient;
+    _timestamp = _purchase.timestamp;
+    _amount = _purchase.amount;
+    _price = _purchase.price;
+  }
+
+  function read_user_purchase_at_index(address _user, uint256 _index)
+           public
+           constant
+           returns (address _recipient, uint256 _timestamp, uint256 _amount, uint256 _price)
+  {
+    Purchase memory _purchase = marketplace.users[_user].purchases[_index];
+    _recipient = _purchase.recipient;
+    _timestamp = _purchase.timestamp;
+    _amount = _purchase.amount;
+    _price = _purchase.price;
+  }
+
+  function create_user(address _user, uint256 _overwrite_daily_dgx_ng_limit)
+           if_sender_is(CONTRACT_CONTROLLER_IDENTITY)
+           public
+           returns (bool _success)
+  {
+    marketplace.users[_user].overwrite_daily_dgx_ng_limit = _overwrite_daily_dgx_ng_limit;
+    _success = true;
+  }
+
+  function update_user_purchase(address _recipient_user, address _buyer, uint256 _purchase_amount, uint256 _purchase_price, uint256 _block_number, uint256 _nonce)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE)
+           public
+           returns (bool _success)
+  {
+    marketplace.used_nonces[_block_number][_nonce] = true;
+    Purchase memory _purchase;
+    _purchase.recipient = _recipient_user;
+    _purchase.timestamp = now;
+    _purchase.amount = _purchase_amount;
+    _purchase.price = _purchase_price;
+    marketplace.users[_buyer].purchases.push(_purchase);
+    marketplace.purchases.push(_purchase);
+    require(token_contract().transfer(_recipient_user, _purchase_amount) == true);
+    _success = true;
+  }
+
+  function update_config(uint256 _global_daily_dgx_ng_limit, uint256 _minimum_purchase_dgx_ng, uint256 _maximum_block_drift, address _payment_collector)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    marketplace.config.global_daily_dgx_ng_limit = _global_daily_dgx_ng_limit;
+    marketplace.config.minimum_purchase_dgx_ng = _minimum_purchase_dgx_ng;
+    marketplace.config.payment_collector = _payment_collector;
+    marketplace.config.maximum_block_drift = _maximum_block_drift;
+    _success = true;
+  }
+
+  function move_inventory(address _destination, uint256 _amount)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    require(token_contract().transfer(_destination, _amount));
+    _success = true;
+  }
+
+  function update_max_dgx_available_daily(uint256 _max_dgx_available_daily)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    marketplace.config.max_dgx_available_daily = _max_dgx_available_daily;
+    _success = true;
+  }
+
+  function read_max_dgx_available_daily()
+           public
+           constant
+           returns (uint256 _max_dgx_available_daily)
+  {
+    _max_dgx_available_daily = marketplace.config.max_dgx_available_daily;
+  }
+
+  function update_price_floor(uint256 _price_floor_wei_per_dgx_mg)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    marketplace.config.price_floor_wei_per_dgx_mg = _price_floor_wei_per_dgx_mg;
+    _success = true;
+  }
+
+  function read_price_floor()
+           public
+           constant
+           returns (uint256 _price_floor_wei_per_dgx_mg)
+  {
+    _price_floor_wei_per_dgx_mg = marketplace.config.price_floor_wei_per_dgx_mg;
+  }
+
+  function update_signer_approval(address _signer, bool _approve)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    marketplace.approved_signers[_signer] = _approve;
+    _success = true;
+  }
+
+  function read_config()
+           public
+           constant
+           returns (uint256 _global_daily_dgx_ng_limit, uint256 _minimum_purchase_dgx_ng, uint256 _maximum_block_drift, address _payment_collector)
+  {
+    _global_daily_dgx_ng_limit = marketplace.config.global_daily_dgx_ng_limit;
+    _minimum_purchase_dgx_ng = marketplace.config.minimum_purchase_dgx_ng;
+    _maximum_block_drift = marketplace.config.maximum_block_drift;
+    _payment_collector = marketplace.config.payment_collector;
+  }
+
+  function read_is_approved_signer(address _signer)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = marketplace.approved_signers[_signer];
+  }
+
+  function read_total_purchased_today(address _user)
+           public
+           constant
+           returns (uint256 _total_purchased_today)
+  {
+    _total_purchased_today = 0;
+    uint256 _i = marketplace.users[_user].purchases.length;
+    while((_i >= 1) && (scope_timestamp_is_from_today(marketplace.users[_user].purchases[_i - 1].timestamp) == true)) {
+      _total_purchased_today += marketplace.users[_user].purchases[_i - 1].amount;
+      _i--;
+    }
+  }
+
+  function read_total_global_purchased_today()
+           public
+           constant
+           returns (uint256 _total_global_purchased_today)
+  {
+    _total_global_purchased_today = 0;
+    uint256 _i = marketplace.purchases.length;
+    while((_i >= 1) && (scope_timestamp_is_from_today(marketplace.purchases[_i - 1].timestamp) == true)) {
+      _total_global_purchased_today += marketplace.purchases[_i - 1].amount;
+      _i--;
+    }
+  }
+
+  function read_dgx_inventory_balance_ng()
+           public
+           constant
+           returns (uint256 _balance)
+  {
+    _balance = token_contract().balanceOf(address(this));
+  }
+
+  function scope_timestamp_is_from_today(uint256 _timestamp)
+           public
+           constant
+           returns (bool _yes)
+  {
+    _yes = (_timestamp >= (now - 1 days));
+  }
+
+  function read_for_purchase(address _user, uint256 _block_number, uint256 _nonce, address _signer)
+           public
+           constant
+           returns (uint256 _daily_dgx_limit, uint256 _total_purchased_today,
+                    bool _used_nonce, bool _approved_signer)
+  {
+    _daily_dgx_limit = read_user_daily_limit(_user);
+    _used_nonce = marketplace.used_nonces[_block_number][_nonce];
+    _approved_signer = marketplace.approved_signers[_signer];
+    _total_purchased_today = read_total_purchased_today(_user);
+  }
+
+  function read_user(address _user)
+           public
+           constant
+           returns (uint256 _daily_dgx_limit, uint256 _total_purchased_today)
+  {
+    _daily_dgx_limit = read_user_daily_limit(_user);
+    _total_purchased_today = read_total_purchased_today(_user);
+  }
+
+  
+  function read_user_daily_limit(address _user)
+           public
+           constant
+           returns (uint256 _daily_dgx_limit)
+  {
+    _daily_dgx_limit = marketplace.users[_user].overwrite_daily_dgx_ng_limit;
+    if (_daily_dgx_limit < marketplace.config.global_daily_dgx_ng_limit) {
+      _daily_dgx_limit = marketplace.config.global_daily_dgx_ng_limit;
+    }
+  }
+
+  function read_user_purchases_count(address _user)
+           public
+           constant
+           returns (uint256 _count)
+  {
+    _count = marketplace.users[_user].purchases.length;
+  }
+
+  function read_user_purchase_details(address _user, uint256 _index)
+           public
+           constant
+           returns (address _recipient, uint256 _timestamp, uint256 _amount, uint256 _price)
+  {
+    _recipient = marketplace.users[_user].purchases[_index].recipient;
+    _timestamp = marketplace.users[_user].purchases[_index].timestamp;
+    _amount = marketplace.users[_user].purchases[_index].amount;
+    _price = marketplace.users[_user].purchases[_index].price;
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract UintIteratorStorage {
+
+  using DoublyLinkedList for DoublyLinkedList.Uint;
+
+  
+  function read_first_from_uints(DoublyLinkedList.Uint storage _list)
+           internal
+           constant
+           returns (uint256 _item)
+  {
+    _item = _list.start_item();
+  }
+
+  
+  function read_last_from_uints(DoublyLinkedList.Uint storage _list)
+           internal
+           constant
+           returns (uint256 _item)
+  {
+    _item = _list.end_item();
+  }
+
+  
+  function read_next_from_uints(DoublyLinkedList.Uint storage _list, uint256 _current_item)
+           internal
+           constant
+           returns (uint256 _item)
+  {
+    _item = _list.next_item(_current_item);
+  }
+
+  
+  function read_previous_from_uints(DoublyLinkedList.Uint storage _list, uint256 _current_item)
+           internal
+           constant
+           returns (uint256 _item)
+  {
+    _item = _list.previous_item(_current_item);
+  }
+
+  
+  function read_total_uints(DoublyLinkedList.Uint storage _list)
+           internal
+           constant
+           returns (uint256 _count)
+  {
+    _count = _list.total();
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+contract ProductsListStorage is UintIteratorStorage, ResolverClient, DigixConstants {
+
+  using DoublyLinkedList for DoublyLinkedList.Uint;
+
+  struct System {
+    mapping (uint256 => Product) products_by_id;
+    DoublyLinkedList.Uint products_list;
+  }
+
+  struct Product {
+    bytes32 document;
+    bool enabled;
+    uint256 ng_weight;
+    uint256 effective_ng_weight;
+  }
+
+  System system;
+
+  function ProductsListStorage(address _resolver) public
+  {
+    require(init(CONTRACT_STORAGE_PRODUCTS_LIST, _resolver));
+  }
+
+  
+  
+  
+  
+  
+  
+  function create_product(bytes32 _document, uint256 _ng_weight, uint256 _effective_ng_weight)
+           if_sender_is(CONTRACT_CONTROLLER_PRODUCTS_LIST)
+           public
+           returns (bool _success, uint256 _product_id)
+  {
+    require(_ng_weight > 0);
+    require(_effective_ng_weight > 0);
+    _product_id = system.products_list.total() + 1;
+    system.products_by_id[_product_id].enabled = true;
+    system.products_by_id[_product_id].document = _document;
+    system.products_by_id[_product_id].ng_weight = _ng_weight;
+    system.products_by_id[_product_id].effective_ng_weight = _effective_ng_weight;
+    _success = system.products_list.append(_product_id);
+  }
+
+  
+  
+  
+  function enable_product(uint256 _product_id)
+           if_sender_is(CONTRACT_CONTROLLER_PRODUCTS_LIST)
+           public
+           returns (bool _success)
+  {
+    if (system.products_by_id[_product_id].enabled == true || system.products_by_id[_product_id].ng_weight == 0 ) {
+      
+      _success = false;
+    } else {
+      system.products_by_id[_product_id].enabled = true;
+      _success = true;
+    }
+  }
+
+  
+  
+  
+  function disable_product(uint256 _product_id)
+           if_sender_is(CONTRACT_CONTROLLER_PRODUCTS_LIST)
+           public
+           returns (bool _success)
+  {
+    if (system.products_by_id[_product_id].enabled == false) {
+      _success = false;
+    } else {
+      system.products_by_id[_product_id].enabled = false;
+      _success = true;
+    }
+  }
+
+
+  
+  
+  
+  
+  
+  
+  function read_product(uint256 _product_id)
+           public
+           constant
+           returns (bytes32 _document, uint256 _ng_weight, uint256 _effective_ng_weight, bool _enabled)
+  {
+    if (system.products_by_id[_product_id].enabled == true) {
+      _ng_weight = system.products_by_id[_product_id].ng_weight;
+      _effective_ng_weight = system.products_by_id[_product_id].effective_ng_weight;
+      _enabled = system.products_by_id[_product_id].enabled;
+      _document = system.products_by_id[_product_id].document;
+    } else {
+      _ng_weight = 0;
+      _effective_ng_weight = 0;
+      _enabled = system.products_by_id[_product_id].enabled;
+      _document = "";
+    }
+  }
+
+  /// @notice read weight and effective weight of an existing product
+  /// @param _product_id the product id
+  /// @return _ng_weight the weight of the product
+  /// @return _effective_ng_weight the effective weight of the product
+  function read_product_ng_weight_and_effective_ng_weight(uint256 _product_id)
+           public
+           constant
+           returns (uint256 _ng_weight, uint256 _effective_ng_weight)
+  {
+    if (system.products_by_id[_product_id].enabled == true) {
+      _ng_weight = system.products_by_id[_product_id].ng_weight;
+      _effective_ng_weight = system.products_by_id[_product_id].effective_ng_weight;
+    } else {
+      _ng_weight = 0;
+      _effective_ng_weight = 0;
+    }
+  }
+
+  /// @notice read the total number of products in product list
+  /// @return _total_count total number of products
+  function read_products_total()
+           public
+           constant
+           returns (uint256 _total_count)
+  {
+    _total_count = read_total_uints(system.products_list);
+  }
+
+  /// @notice read the first product in product list
+  /// @return _item first product
+  function read_first_product()
+           public
+           constant
+           returns (uint256 _item)
+  {
+    _item = read_first_from_uints(system.products_list);
+  }
+
+  /// @notice read the last product in product list
+  /// @return _item last product
+  function read_last_product()
+           public
+           constant
+           returns (uint256 _item)
+  {
+    _item = read_last_from_uints(system.products_list);
+  }
+
+  /// @notice read the next product after some product
+  /// @param _current_item the current item
+  /// @return _item next product
+  function read_next_from_product(uint256 _current_item)
+           public
+           constant
+           returns (uint256 _item)
+  {
+    _item = read_next_from_uints(system.products_list, _current_item);
+  }
+
+  /// @notice read the previous product after some product
+  /// @param _current_item the current item
+  /// @return _item previous product
+  function read_previous_from_product(uint256 _current_item)
+           public
+           constant
+           returns (uint256 _item)
+  {
+    _item = read_previous_from_uints(system.products_list, _current_item);
+  }
+}
+
+// File: @digix/cdap/contracts/service/DirectoryService.sol
+
+pragma solidity ^0.4.19;
+
+/**
+@title Directory Service
+@author DigixGlobal
+*/
+contract DirectoryService {
+
+  /**
+  @notice Returns the user's role id
+  @param _read_role_id_function Function that returns a role id of a user
+  @param _user Id of the user
+  @return {"_role_id": "Role id of the user"}
+  */
+  function internal_get_user_role_id(function (address) external constant returns (uint256) _read_role_id_function, address _user)
+           internal
+           constant
+           returns (uint256 _role_id)
+  {
+    _role_id = _read_role_id_function(_user);
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract IndexedAddressIteratorStorage {
+
+  using DoublyLinkedList for DoublyLinkedList.IndexedAddress;
+  
+  function read_first_from_indexed_addresses(DoublyLinkedList.IndexedAddress storage _list, bytes32 _collection_index)
+           internal
+           constant
+           returns (address _item)
+  {
+    _item = _list.start_item(_collection_index);
+  }
+
+  
+  function read_last_from_indexed_addresses(DoublyLinkedList.IndexedAddress storage _list, bytes32 _collection_index)
+           internal
+           constant
+           returns (address _item)
+  {
+    _item = _list.end_item(_collection_index);
+  }
+
+  
+  function read_next_from_indexed_addresses(DoublyLinkedList.IndexedAddress storage _list, bytes32 _collection_index, address _current_item)
+           internal
+           constant
+           returns (address _item)
+  {
+    _item = _list.next_item(_collection_index, _current_item);
+  }
+
+  
+  function read_previous_from_indexed_addresses(DoublyLinkedList.IndexedAddress storage _list, bytes32 _collection_index, address _current_item)
+           internal
+           constant
+           returns (address _item)
+  {
+    _item = _list.previous_item(_collection_index, _current_item);
+  }
+
+
+  
+  function read_total_indexed_addresses(DoublyLinkedList.IndexedAddress storage _list, bytes32 _collection_index)
+           internal
+           constant
+           returns (uint256 _count)
+  {
+    _count = _list.total(_collection_index);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.16;
+
+
+
+
+contract DirectoryStorage is IndexedAddressIteratorStorage, UintIteratorStorage {
+
+  using DoublyLinkedList for DoublyLinkedList.IndexedAddress;
+  using DoublyLinkedList for DoublyLinkedList.Uint;
+
+  struct User {
+    bytes32 document;
+    bool active;
+  }
+
+  struct Group {
+    bytes32 name;
+    bytes32 document;
+    uint256 role_id;
+    mapping(address => User) members_by_address;
+  }
+
+  struct System {
+    DoublyLinkedList.Uint groups;
+    DoublyLinkedList.IndexedAddress groups_collection;
+    mapping (uint256 => Group) groups_by_id;
+    mapping (address => uint256) group_ids_by_address;
+    mapping (uint256 => bytes32) roles_by_id;
+    bool initialized;
+    uint256 total_groups;
+  }
+
+  System system;
+
+  
+  function initialize_directory()
+           internal
+           returns (bool _success)
+  {
+    require(system.initialized == false);
+    system.total_groups = 0;
+    system.initialized = true;
+    internal_create_role(1, "root");
+    internal_create_group(1, "root", "");
+    _success = internal_update_add_user_to_group(1, tx.origin, "");
+  }
+
+  /**
+  @notice Creates a new role with the given information
+  @param _role_id Id of the new role
+  @param _name Name of the new role
+  @return {"_success": "If creation of new role is successful"}
+  */
+  function internal_create_role(uint256 _role_id, bytes32 _name)
+           internal
+           returns (bool _success)
+  {
+    require(_role_id > 0);
+    require(_name != bytes32(0x0));
+    system.roles_by_id[_role_id] = _name;
+    _success = true;
+  }
+
+  
+  function read_role(uint256 _role_id)
+           public
+           constant
+           returns (bytes32 _name)
+  {
+    _name = system.roles_by_id[_role_id];
+  }
+
+  
+  function internal_create_group(uint256 _role_id, bytes32 _name, bytes32 _document)
+           internal
+           returns (bool _success, uint256 _group_id)
+  {
+    require(_role_id > 0);
+    require(read_role(_role_id) != bytes32(0x0));
+    _group_id = ++system.total_groups;
+    system.groups.append(_group_id);
+    system.groups_by_id[_group_id].role_id = _role_id;
+    system.groups_by_id[_group_id].name = _name;
+    system.groups_by_id[_group_id].document = _document;
+    _success = true;
+  }
+
+  
+  function read_group(uint256 _group_id)
+           public
+           constant
+           returns (uint256 _role_id, bytes32 _name, bytes32 _document, uint256 _members_count)
+  {
+    if (system.groups.valid_item(_group_id)) {
+      _role_id = system.groups_by_id[_group_id].role_id;
+      _name = system.groups_by_id[_group_id].name;
+      _document = system.groups_by_id[_group_id].document;
+      _members_count = read_total_indexed_addresses(system.groups_collection, bytes32(_group_id));
+    } else {
+      _role_id = 0;
+      _name = "invalid";
+      _document = "";
+      _members_count = 0;
+    }
+  }
+
+  /**
+  @notice Adds new user with the given information to a group
+  @param _group_id Id of the group
+  @param _user Address of the new user
+  @param _document Information of the new user
+  @return {"_success": "If adding new user to a group is successful"}
+  */
+  function internal_update_add_user_to_group(uint256 _group_id, address _user, bytes32 _document)
+           internal
+           returns (bool _success)
+  {
+    if (system.groups_by_id[_group_id].members_by_address[_user].active == false && system.group_ids_by_address[_user] == 0 && system.groups_by_id[_group_id].role_id != 0) {
+
+      system.groups_by_id[_group_id].members_by_address[_user].active = true;
+      system.group_ids_by_address[_user] = _group_id;
+      system.groups_collection.append(bytes32(_group_id), _user);
+      system.groups_by_id[_group_id].members_by_address[_user].document = _document;
+      _success = true;
+    } else {
+      _success = false;
+    }
+  }
+
+  
+  function internal_destroy_group_user(address _user)
+           internal
+           returns (bool _success)
+  {
+    uint256 _group_id = system.group_ids_by_address[_user];
+    if ((_group_id == 1) && (system.groups_collection.total(bytes32(_group_id)) == 1)) {
+      _success = false;
+    } else {
+      system.groups_by_id[_group_id].members_by_address[_user].active = false;
+      system.group_ids_by_address[_user] = 0;
+      delete system.groups_by_id[_group_id].members_by_address[_user];
+      _success = system.groups_collection.remove_item(bytes32(_group_id), _user);
+    }
+  }
+
+  
+  function read_user_role_id(address _user)
+           constant
+           public
+           returns (uint256 _role_id)
+  {
+    uint256 _group_id = system.group_ids_by_address[_user];
+    _role_id = system.groups_by_id[_group_id].role_id;
+  }
+
+  
+  function read_user(address _user)
+           public
+           constant
+           returns (uint256 _group_id, uint256 _role_id, bytes32 _document)
+  {
+    _group_id = system.group_ids_by_address[_user];
+    _role_id = system.groups_by_id[_group_id].role_id;
+    _document = system.groups_by_id[_group_id].members_by_address[_user].document;
+  }
+
+  
+  function read_first_group()
+           view
+           external
+           returns (uint256 _group_id)
+  {
+    _group_id = read_first_from_uints(system.groups);
+  }
+
+  
+  function read_last_group()
+           view
+           external
+           returns (uint256 _group_id)
+  {
+    _group_id = read_last_from_uints(system.groups);
+  }
+
+  
+  function read_previous_group_from_group(uint256 _current_group_id)
+           view
+           external
+           returns (uint256 _group_id)
+  {
+    _group_id = read_previous_from_uints(system.groups, _current_group_id);
+  }
+
+  
+  function read_next_group_from_group(uint256 _current_group_id)
+           view
+           external
+           returns (uint256 _group_id)
+  {
+    _group_id = read_next_from_uints(system.groups, _current_group_id);
+  }
+
+  
+  function read_total_groups()
+           view
+           external
+           returns (uint256 _total_groups)
+  {
+    _total_groups = read_total_uints(system.groups);
+  }
+
+  
+  function read_first_user_in_group(bytes32 _group_id)
+           view
+           external
+           returns (address _user)
+  {
+    _user = read_first_from_indexed_addresses(system.groups_collection, bytes32(_group_id));
+  }
+
+  
+  function read_last_user_in_group(bytes32 _group_id)
+           view
+           external
+           returns (address _user)
+  {
+    _user = read_last_from_indexed_addresses(system.groups_collection, bytes32(_group_id));
+  }
+
+  
+  function read_next_user_in_group(bytes32 _group_id, address _current_user)
+           view
+           external
+           returns (address _user)
+  {
+    _user = read_next_from_indexed_addresses(system.groups_collection, bytes32(_group_id), _current_user);
+  }
+
+  
+  function read_previous_user_in_group(bytes32 _group_id, address _current_user)
+           view
+           external
+           returns (address _user)
+  {
+    _user = read_previous_from_indexed_addresses(system.groups_collection, bytes32(_group_id), _current_user);
+  }
+
+  
+  function read_total_users_in_group(bytes32 _group_id)
+           view
+           external
+           returns (uint256 _total_users)
+  {
+    _total_users = read_total_indexed_addresses(system.groups_collection, bytes32(_group_id));
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+contract DigixDirectoryStorage is DirectoryStorage, ResolverClient, DigixConstants {
+
+  function DigixDirectoryStorage(address _resolver) public {
+    require(init(CONTRACT_STORAGE_DIGIX_DIRECTORY, _resolver));
+    require(initialize_directory());
+  }
+
+  function create_group(uint256 _role_id, bytes32 _name, bytes32 _document)
+           if_sender_is(CONTRACT_CONTROLLER_DIGIX_DIRECTORY)
+           public
+           returns (bool _success, uint256 _group_id)
+  {
+    (_success, _group_id) = internal_create_group(_role_id, _name, _document);
+    require(_success);
+  }
+
+  function create_role(uint256 _role_id, bytes32 _name)
+           if_sender_is(CONTRACT_CONTROLLER_DIGIX_DIRECTORY)
+           public
+           returns (bool _success)
+  {
+    _success = internal_create_role(_role_id, _name);
+    require(_success);
+  }
+
+  function update_add_user_to_group(uint256 _group_id, address _user, bytes32 _document)
+           if_sender_is(CONTRACT_CONTROLLER_DIGIX_DIRECTORY)
+           public
+           returns (bool _success)
+  {
+    _success = internal_update_add_user_to_group(_group_id, _user, _document);
+    require(_success);
+  }
+
+  function update_remove_group_user(address _user)
+           if_sender_is(CONTRACT_CONTROLLER_DIGIX_DIRECTORY)
+           public
+           returns (bool _success)
+  {
+    _success = internal_destroy_group_user(_user);
+    require(_success);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+contract DigixDirectoryService is DirectoryService, ResolverClient, DigixConstants {
+
+  function DigixDirectoryService(address _resolver) public
+  {
+    require(init(CONTRACT_SERVICE_DIRECTORY, _resolver));
+  }
+
+  function directory_storage()
+           internal
+           constant
+           returns (DigixDirectoryStorage _contract)
+  {
+    _contract = DigixDirectoryStorage(get_contract(CONTRACT_STORAGE_DIGIX_DIRECTORY));
+  }
+
+  function get_user_role_id(address _user)
+           public
+           constant
+           returns (uint256 _role_id)
+  {
+    _role_id = internal_get_user_role_id(directory_storage().read_user_role_id, _user);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+contract Controller is ResolverClient, DigixConstants {
+
+  function products_list_storage()
+           internal
+           constant
+           returns (ProductsListStorage _contract)
+  {
+    _contract = ProductsListStorage(get_contract(CONTRACT_STORAGE_PRODUCTS_LIST));
+  }
+
+  function digix_directory_service()
+           internal
+           constant
+           returns (DigixDirectoryService _contract)
+  {
+    _contract = DigixDirectoryService(get_contract(CONTRACT_SERVICE_DIRECTORY));
+  }
+
+  function token_demurrage_service()
+           internal
+           constant
+           returns (TokenDemurrageService _contract)
+  {
+    _contract = TokenDemurrageService(get_contract(CONTRACT_SERVICE_TOKEN_DEMURRAGE));
+  }
+
+  function assets_storage()
+           internal
+           constant
+           returns (AssetsStorage _contract)
+  {
+    _contract = AssetsStorage(get_contract(CONTRACT_STORAGE_ASSETS));
+  }
+
+  function marketplace_storage()
+           internal
+           constant
+           returns (MarketplaceStorage _contract)
+  {
+    _contract = MarketplaceStorage(get_contract(CONTRACT_STORAGE_MARKETPLACE));
+  }
+
+  function gold_token_storage()
+           internal
+           constant
+           returns (GoldTokenStorage _contract)
+  {
+    _contract = GoldTokenStorage(get_contract(CONTRACT_STORAGE_GOLD_TOKEN));
+  }
+
+  function asset_events_storage()
+           internal
+           constant
+           returns (AssetEventsStorage _contract)
+  {
+    _contract = AssetEventsStorage(get_contract(CONTRACT_STORAGE_ASSET_EVENTS));
+  }
+
+  function identity_storage()
+           internal
+           constant
+           returns (IdentityStorage _contract)
+  {
+    _contract = IdentityStorage(get_contract(CONTRACT_STORAGE_IDENTITY));
+  }
+
+
+  modifier if_caller_is_role(address _caller, uint256 _intended_role_id) {
+    uint256 _role_id = digix_directory_service().get_user_role_id(_caller);
+    require(_role_id == _intended_role_id);
+    _;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+contract ACConditions is Constants {
+
+  modifier not_null_address(address _item) {
+    require(_item != NULL_ADDRESS);
+    _;
+  }
+
+  modifier if_null_address(address _item) {
+    require(_item == NULL_ADDRESS);
+    _;
+  }
+
+  modifier not_null_uint(uint256 _item) {
+    require(_item != ZERO);
+    _;
+  }
+
+  modifier if_null_uint(uint256 _item) {
+    require(_item == ZERO);
+    _;
+  }
+
+  modifier not_empty_bytes(bytes32 _item) {
+    require(_item != EMPTY);
+    _;
+  }
+
+  modifier if_empty_bytes(bytes32 _item) {
+    require(_item == EMPTY);
+    _;
+  }
+
+  modifier not_null_string(string _item) {
+    bytes memory _i = bytes(_item);
+    require(_i.length > 0);
+    _;
+  }
+
+  modifier if_null_string(string _item) {
+    bytes memory _i = bytes(_item);
+    require(_i.length == 0);
+    _;
+  }
+
+  modifier require_gas(uint256 _requiredgas) {
+    require(msg.gas  >= (_requiredgas - 22000));
+    _;
+  }
+
+  function is_contract(address _contract)
+           public
+           constant
+           returns (bool _is_contract)
+  {
+    uint32 _code_length;
+
+    assembly {
+      _code_length := extcodesize(_contract)
+    }
+
+    if(_code_length > 1) {
+      _is_contract = true;
+    } else {
+      _is_contract = false;
+    }
+  }
+
+  modifier if_contract(address _contract) {
+    require(is_contract(_contract) == true);
+    _;
+  }
+
+  modifier unless_contract(address _contract) {
+    require(is_contract(_contract) == false);
+    _;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+library ECVerify {
+
+  struct Signature {
+    bytes32 hash;
+    bytes32 r;
+    bytes32 s;
+    uint8 v;
+  }
+
+  function parse_signature(bytes32 _hash, bytes _sigbytes) internal pure returns (Signature _signature) {
+    bytes32 _r;
+    bytes32 _s;
+    uint8 _v;
+
+    assembly {
+      _r := mload(add(_sigbytes, 32))
+      _s := mload(add(_sigbytes, 64))
+      _v := byte(0, mload(add(_sigbytes, 96)))
+    }
+    if (_v < 27) {
+      _v += 27;
+    }
+    if ((_v == 27) || (_v == 28)) {
+      _signature.hash = _hash;
+      _signature.r = _r;
+      _signature.s = _s;
+      _signature.v = _v;
+    } else {
+      _signature.hash = 0x0;
+      _signature.r = 0x0;
+      _signature.s = 0x0;
+      _signature.v = 0;
+    }
+    delete _sigbytes;
+  }
+
+  function safe_ecrecover(Signature memory _signature) internal returns (bool _verifies, address _signer) {
+    bytes32 _hash = _signature.hash;
+    bytes32 _r = _signature.r;
+    bytes32 _s = _signature.s;
+    uint8 _v = _signature.v;
+
+    assembly {
+      let _size := mload(0x40)
+      mstore(_size, _hash)
+      mstore(add(_size, 32), _v)
+      mstore(add(_size, 64), _r)
+      mstore(add(_size, 96), _s)
+      _verifies := call(3000, 1, 0, _size, 128, _size, 32)
+      _signer := mload(_size)
+    }
+    delete _hash;
+    delete _r;
+    delete _s;
+    delete _v;
+
+    if (_verifies == true) {
+      return (_verifies, _signer);
+    } else {
+      return (_verifies, address(0x0));
+    }
+  }
+
+  function ecrecovery(bytes32 _hash, bytes _sigbytes) public returns (bool _verifies, address _signer) {
+    Signature memory _signature = parse_signature(_hash, _sigbytes);
+    (_verifies, _signer) = safe_ecrecover(_signature);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+contract MarketplaceService is ResolverClient, DigixConstants  {
+
+  mapping (uint => mapping(uint => bool)) used_nonces;
+
+  function MarketplaceService(address _resolver) public {
+    require(init(CONTRACT_SERVICE_MARKETPLACE, _resolver));
+  }
+
+  function verify_signed_price(uint _block_number, uint _nonce, uint _price, address _signer, bytes _signature)
+           public
+           returns (bool _verified, address _actual_signer)
+  {
+   bytes32 _hash;
+   bool _verifies;
+   _hash = hash_price_data(_block_number, _nonce, _price);
+   (_verifies,_actual_signer) = ECVerify.ecrecovery(_hash, _signature);
+   _verified = (_verifies && (_actual_signer == _signer));
+  }
+
+  function concat_price_data(uint _a, uint _b, uint _c) internal pure returns (string _result) {
+    uint maxlength = 100;
+    bytes memory _reversed = new bytes(maxlength);
+    uint i = 0;
+    uint t = 0;
+    uint _remainder;
+    while(_c != 0) {
+      _remainder = _c % 10;
+      _c = _c / 10;
+      _reversed[i++] = byte(48 + _remainder);
+      t++;
+    }
+    _reversed[i++] = byte(0x3a);
+    t++;
+    while(_b != 0) {
+      _remainder = _b % 10;
+      _b = _b / 10;
+      _reversed[i++] = byte(48 + _remainder);
+      t++;
+    }
+    _reversed[i++] = byte(0x3a);
+    t++;
+    while(_a != 0) {
+      _remainder = _a % 10;
+      _a = _a / 10;
+      _reversed[i++] = byte(48 + _remainder);
+      t++;
+    }
+
+    uint _x = t;
+
+    while(_x != 0) {
+      uint _rem_x = _x % 10;
+      _x = _x / 10;
+      _reversed[i++] = byte(48 + _rem_x);
+      t++;
+    }
+
+    bytes memory _correct = new bytes(t);
+    uint k = 0;
+    uint j = t - 1;
+
+    while(t > 0) {
+      _correct[k] = _reversed[--t];
+      k++;
+      j--;
+    }
+    _result = string(_correct);
+  }
+
+  function hash_price_data(uint _block_number, uint _nonce, uint _price) public pure returns (bytes32 _keccak_hash) {
+    string memory _message = concat_price_data(_block_number, _nonce, _price);
+    bytes memory _prefix = "\x19Ethereum Signed Message:\n";
+    _keccak_hash = keccak256(_prefix, _message);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+contract MarketplaceControllerCommon is Controller, ACConditions {
+
+  uint256 constant public MILLIGRAM_TO_NANOGRAMS = 1000000;
+
+  function marketplace_service()
+           internal
+           constant
+           returns (MarketplaceService _contract)
+  {
+    _contract = MarketplaceService(get_contract(CONTRACT_SERVICE_MARKETPLACE));
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+contract MarketplaceAdminController is MarketplaceControllerCommon {
+
+  function MarketplaceAdminController(address _resolver) public
+  {
+    require(init(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN, _resolver));
+  }
+
+  function gold_token_storage()
+           internal
+           constant
+           returns (GoldTokenStorage _contract)
+  {
+    _contract = GoldTokenStorage(get_contract(CONTRACT_STORAGE_GOLD_TOKEN));
+  }
+
+  function digix_directory_service()
+           internal
+           constant
+           returns (DigixDirectoryService _contract)
+  {
+    _contract = DigixDirectoryService(get_contract(CONTRACT_SERVICE_DIRECTORY));
+  }
+
+  function put_config(address _caller, uint256 _global_daily_dgx_ng_limit, uint256 _minimum_purchase_dgx_ng, uint256 _maximum_block_drift, address _payment_collector)
+           unless_contract(_payment_collector)
+           if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN)
+           if_caller_is_role(_caller, ROLE_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().update_config(_global_daily_dgx_ng_limit, _minimum_purchase_dgx_ng, _maximum_block_drift, _payment_collector);
+  }
+
+  function put_approve_signer(address _caller, address _signer)
+           if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN)
+           if_caller_is_role(_caller, ROLE_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().update_signer_approval(_signer, true);
+  }
+
+  function put_revoke_signer(address _caller, address _signer)
+           if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN)
+           if_caller_is_role(_caller, ROLE_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().update_signer_approval(_signer, false);
+  }
+
+  function put_price_floor(address _caller, uint256 _price_floor_wei_per_dgx_mg)
+           if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN)
+           if_caller_is_role(_caller, ROLE_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().update_price_floor(_price_floor_wei_per_dgx_mg);
+  }
+
+  function put_max_dgx_available_daily(address _caller, uint256 _max_dgx_available_daily)
+           if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN)
+           if_caller_is_role(_caller, ROLE_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().update_max_dgx_available_daily(_max_dgx_available_daily);
+  }
+
+  function move_inventory(address _caller, address _destination, uint256 _amount)
+           if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN)
+           if_caller_is_role(_caller, ROLE_MARKETPLACE_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().move_inventory(_destination, _amount);
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+
+contract MarketplaceController is MarketplaceControllerCommon {
+
+  function MarketplaceController(address _resolver) public
+  {
+    require(init(CONTRACT_CONTROLLER_MARKETPLACE, _resolver));
+  }
+
+  struct UintData {
+    uint256 pre;
+    uint256 post;
+  }
+
+  struct Config {
+    uint256 global_dgx_ng_limit;
+    uint256 minimum_purchase_dgx_ng;
+    uint256 maximum_block_drift;
+    address payment_collector;
+    uint256 max_dgx_available_daily;
+    uint256 price_floor_wei_per_dgx_mg;
+  }
+
+  struct Verification {
+    uint256 amount_dgx_ng;
+    uint256 block_number;
+    address signer;
+    bool valid_signature;
+    bool used_nonce;
+    bool approved_signer;
+  }
+
+  struct Purchase {
+    User buyer;
+    User recipient;
+    Verification verification;
+    Config config;
+    uint256 wei_sent;
+    uint256 wei_per_dgx_mg;
+    uint256 block_number;
+    uint256 nonce;
+    address signer;
+    bytes signature;
+  }
+
+  struct User {
+    address account;
+    uint256 total_purchased_today;
+    bool valid_kyc;
+    uint256 daily_dgx_limit;
+  }
+
+  function put_purchase_for(uint256 _wei_sent, address _buyer, address _recipient, uint256 _block_number, uint256 _nonce, uint256 _wei_per_dgx_mg, address _signer, bytes _signature)
+           if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE)
+           payable
+           public
+           returns (bool _success, uint256 _purchased_amount)
+  {
+    Purchase memory _purchase;
+
+    (_purchase.config.global_dgx_ng_limit, _purchase.config.minimum_purchase_dgx_ng, _purchase.config.maximum_block_drift, _purchase.config.payment_collector) = marketplace_storage().read_config();
+    _purchase.config.max_dgx_available_daily = marketplace_storage().read_max_dgx_available_daily();
+    _purchase.config.price_floor_wei_per_dgx_mg = marketplace_storage().read_price_floor();
+
+    _purchase.buyer.account = _buyer;
+    _purchase.recipient.account = _recipient;
+    _purchase.block_number = _block_number;
+    _purchase.nonce = _nonce;
+    _purchase.wei_per_dgx_mg = _wei_per_dgx_mg;
+    _purchase.signer = _signer;
+    _purchase.signature = _signature;
+    _purchase.wei_sent = _wei_sent;
+
+    Purchase memory _processed;
+    (_processed, _success) = verify_purchase(_purchase);
+    _purchased_amount = _processed.verification.amount_dgx_ng;
+  }
+
+  function verify_purchase(Purchase memory _purchase)
+           internal
+           returns (Purchase memory _processed, bool _success)
+  {
+    _processed = _purchase;
+    _processed.verification.amount_dgx_ng = (_purchase.wei_sent * MILLIGRAM_TO_NANOGRAMS) / _purchase.wei_per_dgx_mg;
+
+    (_processed.verification.valid_signature,
+     _processed.verification.signer)
+     = marketplace_service().verify_signed_price(_purchase.block_number,
+                                                 _purchase.nonce,
+                                                 _purchase.wei_per_dgx_mg,
+                                                 _purchase.signer,
+                                                 _purchase.signature);
+
+    (_processed.buyer.daily_dgx_limit,
+     _processed.buyer.total_purchased_today,
+     _processed.verification.used_nonce,
+     _processed.verification.approved_signer)
+     = marketplace_storage().read_for_purchase(_processed.buyer.account,
+                                               _processed.block_number,
+                                               _processed.nonce,
+                                               _processed.signer);
+    _processed.buyer.valid_kyc = identity_storage().read_user_kyc_valid(_processed.buyer.account);
+    require(_processed.buyer.valid_kyc);
+
+    require(_processed.wei_per_dgx_mg >= _processed.config.price_floor_wei_per_dgx_mg);
+    require(marketplace_storage().read_total_global_purchased_today() + _processed.verification.amount_dgx_ng <= _processed.config.max_dgx_available_daily);
+    require(marketplace_storage().read_is_approved_signer(_processed.verification.signer));
+    require(_processed.verification.signer == _processed.signer);
+    require(_processed.verification.used_nonce == false);
+    require(_processed.verification.amount_dgx_ng  >= _processed.config.minimum_purchase_dgx_ng);
+    require((_processed.buyer.total_purchased_today + _processed.verification.amount_dgx_ng) <= _processed.buyer.daily_dgx_limit);
+    require(_processed.verification.valid_signature);
+    require((_processed.block_number + _purchase.config.maximum_block_drift) >= block.number);
+    require(marketplace_storage().update_user_purchase(_processed.recipient.account, _processed.buyer.account, _processed.verification.amount_dgx_ng, _processed.wei_per_dgx_mg, _processed.block_number, _processed.nonce));
+    _processed.config.payment_collector.transfer(_processed.wei_sent);
+    _success = true;
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+contract MarketplaceCommon is ResolverClient, ACConditions, DigixConstants {
+
+  function marketplace_admin_controller()
+           internal
+           constant
+           returns (MarketplaceAdminController _contract)
+  {
+    _contract = MarketplaceAdminController(get_contract(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN));
+  }
+
+  function marketplace_storage()
+           internal
+           constant
+           returns (MarketplaceStorage _contract)
+  {
+    _contract = MarketplaceStorage(get_contract(CONTRACT_STORAGE_MARKETPLACE));
+  }
+
+  function marketplace_controller()
+           internal
+           constant
+           returns (MarketplaceController _contract)
+  {
+    _contract = MarketplaceController(get_contract(CONTRACT_CONTROLLER_MARKETPLACE));
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+contract DigixConstantsElectron {
+    uint256 constant ROLE_ELECTRON_MARKETPLACE_ADMIN = 13; 
+    uint256 constant ROLE_ASSET_RECAST_SIGNER = 14; 
+
+    
+    bytes32 constant CONTRACT_STORAGE_MARKETPLACE_ELECTRON = "s:mp:electron";
+    bytes32 constant CONTRACT_STORAGE_ASSETS_ELECTRON = "s:assets:electron";
+    bytes32 constant CONTRACT_SERVICE_VERIFICATION = "service:verification";
+    bytes32 constant CONTRACT_CONTROLLER_ASSETS_ELECTRON = "c:assets:electron";
+    bytes32 constant CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON = "c:mpadmin:electron";
+    bytes32 constant CONTRACT_INTERACTIVE_MARKETPLACE_ELECTRON = "i:mp:electron";
+    bytes32 constant CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN_ELECTRON = "i:mpadmin:electron";
+    bytes32 constant CONTRACT_INTERACTIVE_ASSETS_EXPLORER_ELECTRON = "i:assets:explorer:electron";
+
+    uint256 constant TOKEN_INDEX_FIAT = 1;
+    uint256 constant TOKEN_INDEX_ETHER = 2;
+    uint256 constant TOKEN_INDEX_DAI = 3;
+
+    uint256 constant MAX_INTEGER = uint256(0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff);
+
+    uint256 constant DUMMY_NONCE = 123;
+    
+}
+
+
+
+pragma solidity ^0.4.19;
+
+contract DigixConstantsExtras {
+    
+    bytes32 constant CONTRACT_STORAGE_MARKETPLACE_EXTRAS = "s:mp:extras";
+    bytes32 constant CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_EXTRAS = "c:mpadmin:extras";
+    bytes32 constant CONTRACT_INTERACTIVE_MARKETPLACE_V2 = "i:mp:v2";
+    bytes32 constant CONTRACT_INTERACTIVE_MARKETPLACE_ADMIN_EXTRAS = "i:mpadmin:extras";
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+contract MarketplaceStorageExtras is ResolverClient, DigixConstants, DigixConstantsExtras {
+
+
+  struct User {
+    uint256[] dai_purchases;
+    mapping(uint256 => bool) is_dai_purchase;
+  }
+
+  address public dai_payment_collector;
+  mapping (address => uint256) public eth_signers_minimum_order; 
+  mapping (address => uint256) public dai_signers_minimum_order; 
+  address[] public all_eth_signers;
+  address[] public all_dai_signers;
+
+  uint256[] public all_dai_purchases;  
+  mapping(uint256 => bool) public is_dai_purchase; 
+
+  mapping (address => User) users;
+
+  function MarketplaceStorageExtras(address _resolver) public
+  {
+    require(init(CONTRACT_STORAGE_MARKETPLACE_EXTRAS, _resolver));
+  }
+
+  function read_total_number_of_dai_purchases()
+           public
+           constant
+           returns (uint256 _total_number_of_dai_purchases)
+  {
+    _total_number_of_dai_purchases = all_dai_purchases.length;
+  }
+
+  function read_total_number_of_user_dai_purchases(address _user)
+           public
+           constant
+           returns (uint256 _total_number_of_user_dai_purchases)
+  {
+    _total_number_of_user_dai_purchases = users[_user].dai_purchases.length;
+  }
+
+  function read_user_dai_purchase_at_index(address _user, uint256 _index)
+           public
+           constant
+           returns (uint256 _purchase_index)
+  {
+    _purchase_index = users[_user].dai_purchases[_index];
+  }
+
+  function read_all_eth_signers_count() public constant returns (uint256 _count) {
+    _count = all_eth_signers.length;
+  }
+
+  function read_all_dai_signers_count() public constant returns (uint256 _count) {
+    _count = all_dai_signers.length;
+  }
+
+  function add_dai_purchase(address _user, uint256 _user_purchase_index, uint256 _global_purchase_index)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE)
+           public
+           returns (bool _success)
+  {
+    users[_user].dai_purchases.push(_user_purchase_index);
+    users[_user].is_dai_purchase[_user_purchase_index] = true;
+    all_dai_purchases.push(_global_purchase_index);
+    is_dai_purchase[_global_purchase_index] = true;
+    _success = true;
+  }
+
+  function update_dai_collector(address _dai_payment_collector)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_EXTRAS)
+           public
+           returns (bool _success)
+  {
+    dai_payment_collector = _dai_payment_collector;
+    _success = true;
+  }
+
+  function update_eth_signer_minimum_order(address _signer, uint256 _min_order)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_EXTRAS)
+           public
+           returns (bool _success)
+  {
+    eth_signers_minimum_order[_signer] = _min_order;
+    if (address_not_in_array(_signer, all_eth_signers)) {
+      all_eth_signers.push(_signer);
+    }
+    _success = true;
+  }
+
+  function update_dai_signer_minimum_order(address _signer, uint256 _min_order)
+           if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_EXTRAS)
+           public
+           returns (bool _success)
+  {
+    dai_signers_minimum_order[_signer] = _min_order;
+    if (address_not_in_array(_signer, all_dai_signers)) {
+      all_dai_signers.push(_signer);
+    }
+    _success = true;
+  }
+
+  function read_eth_signer_info(address _signer)
+           public
+           constant
+           returns (bool _signer_approved, uint256 _signer_minimum_order)
+  {
+    _signer_minimum_order = eth_signers_minimum_order[_signer];
+    _signer_approved = _signer_minimum_order != 0;
+  }
+
+  function read_dai_signer_info(address _signer)
+           public
+           constant
+           returns (bool _signer_approved, uint256 _signer_minimum_order)
+  {
+    _signer_minimum_order = dai_signers_minimum_order[_signer];
+    _signer_approved = _signer_minimum_order != 0;
+  }
+
+  function address_not_in_array(address _address, address[] _array)
+           internal
+           pure
+           returns (bool _not_in)
+  {
+    _not_in = true;
+    for (uint256 i=0;i<_array.length;i++) {
+      if (_array[i] == _address) {
+        _not_in = false;
+        break;
+      }
+    }
+  }
+
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+contract MarketplaceStorageElectron is ResolverClient, DigixConstants, DigixConstantsExtras, DigixConstantsElectron {
+
+    struct User {
+        uint256 daily_limit;
+        uint256 lifetime_limit;
+        uint256 lifetime_total_purchased;
+        address previous_address;
+        address next_address;
+    }
+
+    mapping (address => uint256) public token_of_signer;
+    mapping (address => uint256) public min_order_of_signer;
+    mapping (address => User) users;
+
+    
+    mapping (uint256 => address) public token_payment_collector;
+    
+    mapping (uint256 => uint256) token_of_purchase;
+    
+    
+    
+    
+    address[] public all_tokens;
+    address[] public all_signers;
+    uint256 public default_tier1_lifetime_limit;
+    uint256 public default_tier1_daily_limit;
+    uint256 public default_tier2_daily_limit;
+
+    function MarketplaceStorageElectron(address _resolver, address _dai_address) public {
+        require(init(CONTRACT_STORAGE_MARKETPLACE_ELECTRON, _resolver));
+        default_tier2_daily_limit = 110e9;
+        default_tier1_daily_limit = 10e9;
+        default_tier1_lifetime_limit = 110e9;
+        all_tokens.push(0x0); 
+        all_tokens.push(0x0); 
+        all_tokens.push(0x0); 
+        all_tokens.push(_dai_address); 
+    }
+
+    function marketplace_storage()
+        internal
+        constant
+        returns (MarketplaceStorage _contract)
+    {
+        _contract = MarketplaceStorage(get_contract(CONTRACT_STORAGE_MARKETPLACE));
+    }
+
+    function marketplace_storage_extras()
+        internal
+        constant
+        returns (MarketplaceStorageExtras _contract)
+    {
+        _contract = MarketplaceStorageExtras(get_contract(CONTRACT_STORAGE_MARKETPLACE_EXTRAS));
+    }
+
+    function identity_storage()
+        internal
+        constant
+        returns (IdentityStorage _contract)
+    {
+        _contract = IdentityStorage(get_contract(CONTRACT_STORAGE_IDENTITY));
+    }
+
+    function migrate_users(address[] old_users)
+        public
+        returns (uint256 processed)
+    {
+        address user;
+        uint256 purchase_count;
+        uint256 purchase_amount;
+
+        for (uint256 i = 0; i < old_users.length; i++) {
+            user = old_users[i];
+            if (users[user].lifetime_total_purchased == 0 && identity_storage().read_user_kyc_valid(user)) {
+                
+                
+
+                purchase_count = marketplace_storage().read_total_number_of_user_purchases(user);
+                for (uint purchase_index = 0; purchase_index < purchase_count; purchase_index++) {
+                    (,,purchase_amount,) = marketplace_storage().read_user_purchase_at_index(user, purchase_index);
+                    users[user].lifetime_total_purchased += purchase_amount;
+                }
+                (users[user].daily_limit,) = marketplace_storage().read_user(user);
+
+                processed++;
+            }
+        }
+    }
+
+    function signers_count()
+        public
+        constant
+        returns (uint256 _count)
+    {
+        _count = all_signers.length;
+    }
+
+    function tokens_count()
+        public
+        constant
+        returns (uint256 _count)
+    {
+        _count = all_tokens.length;
+    }
+
+    function read_user(address _user)
+        public
+        constant
+        returns (
+            uint256 _lifetime_limit,
+            uint256 _daily_limit,
+            uint256 _lifetime_total_purchased,
+            address _previous_address,
+            address _next_address
+        )
+    {
+        _lifetime_limit = users[_user].lifetime_limit;
+        _daily_limit = users[_user].daily_limit;
+        _lifetime_total_purchased = users[_user].lifetime_total_purchased;
+        _previous_address = users[_user].previous_address;
+        _next_address = users[_user].next_address;
+    }
+
+    function update_default_daily_limit(uint256 _default_tier1_daily_limit, uint256 _default_tier2_daily_limit)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON)
+        public
+    {
+        default_tier1_daily_limit = _default_tier1_daily_limit;
+        default_tier2_daily_limit = _default_tier2_daily_limit;
+    }
+
+    function update_user_limits(address _user, uint256 _new_lifetime_limit, uint256 _new_daily_limit)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON)
+        public
+    {
+        users[_user].lifetime_limit = _new_lifetime_limit;
+        users[_user].daily_limit = _new_daily_limit;
+    }
+
+    function change_user_address(address _old_user, address _new_user)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON)
+        public
+    {
+        users[_old_user].next_address = _new_user;
+        users[_new_user].previous_address = _old_user;
+        users[_new_user].daily_limit = users[_old_user].daily_limit;
+        users[_new_user].lifetime_total_purchased = users[_old_user].lifetime_total_purchased;
+        users[_new_user].lifetime_limit = users[_old_user].lifetime_limit;
+    }
+
+    function add_purchase(address _user, uint256 _purchase_index, uint256 _token_index, uint256 _amount)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE)
+        public
+    {
+        users[_user].lifetime_total_purchased += _amount;
+        token_of_purchase[_purchase_index] = _token_index;
+    }
+
+    function read_token_of_purchase(uint256 _purchase_index)
+        public
+        constant
+        returns (uint256 _token_index)
+    {
+        _token_index = token_of_purchase[_purchase_index];
+        if (marketplace_storage_extras().is_dai_purchase(_purchase_index)) {
+            _token_index = TOKEN_INDEX_DAI; 
+        }
+        if (_token_index == 0) {
+            
+            _token_index == TOKEN_INDEX_ETHER;
+        }
+    }
+
+    function update_token_collector(uint256 _token_index, address _collector)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON)
+        public
+    {
+        token_payment_collector[_token_index] = _collector;
+    }
+
+    function add_token(address _token_address)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON)
+        public
+    {
+        all_tokens.push(_token_address);
+    }
+
+    function update_default_tier1_lifetime_limit(uint256 _new_limit)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON)
+        public
+    {
+        default_tier1_lifetime_limit = _new_limit;
+    }
+
+    function update_signer(address _signer, uint256 _token_index, uint256 _min_order)
+        if_sender_is(CONTRACT_CONTROLLER_MARKETPLACE_ADMIN_ELECTRON)
+        public
+    {
+        require(_token_index > TOKEN_INDEX_FIAT);
+        if (token_of_signer[_signer] == 0) {
+            all_signers.push(_signer);
+        }
+        token_of_signer[_signer] = _token_index;
+        min_order_of_signer[_signer] = _min_order;
+    }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+contract VerificationService is ResolverClient, DigixConstantsElectron  {
+
+    function VerificationService(address _resolver) public {
+        require(init(CONTRACT_SERVICE_VERIFICATION, _resolver));
+    }
+
+    struct Message {
+        bytes userAddress;
+        bytes kycTier;
+        bytes kycExpiry;
+        bytes blockNumber;
+        bytes price;
+    }
+
+    struct KycMessage {
+        bytes userAddress;
+        bytes kycTier;
+        bytes kycExpiry;
+        bytes blockNumber;
+    }
+
+    struct Signature {
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+    }
+
+    function convertToBytes(
+        address user_address,
+        uint kyc_tier,
+        uint kyc_expiry,
+        uint block_number,
+        uint price
+    )
+        internal
+        pure
+        returns (Message)
+    {
+        return Message(
+            addressToBytes(user_address),
+            intToBytes(kyc_tier),
+            intToBytes(kyc_expiry),
+            intToBytes(block_number),
+            intToBytes(price)
+        );
+    }
+
+    function convertKycMessageToBytes(
+        address user_address,
+        uint kyc_tier,
+        uint kyc_expiry,
+        uint block_number
+    )
+        internal
+        pure
+        returns (KycMessage)
+    {
+        return KycMessage(
+            addressToBytes(user_address),
+            intToBytes(kyc_tier),
+            intToBytes(kyc_expiry),
+            intToBytes(block_number)
+        );
+    }
+
+    function verify_user_kyc(
+        address user_address,
+        uint kyc_tier,
+        uint kyc_expiry,
+        uint block_number,
+        bytes signature,
+        address signer
+    )
+        public
+        pure
+        returns (bool)
+    {
+        bytes memory delimiter = new bytes(1);
+        delimiter[0] = 0x3a;
+
+        KycMessage memory _m = convertKycMessageToBytes(user_address, kyc_tier, kyc_expiry, block_number);
+
+        bytes memory lengthBytes = intToBytes(_m.userAddress.length + _m.kycTier.length + _m.kycExpiry.length + _m.blockNumber.length + 4);
+
+        bytes memory message = concat_bytes(
+            concat_bytes(
+                concat_bytes("\x19Ethereum Signed Message:\n", lengthBytes),
+                concat_bytes(delimiter, _m.userAddress)
+            ),
+            concat_bytes(
+                concat_bytes(
+                    concat_bytes(delimiter, _m.kycTier),
+                    concat_bytes(delimiter, _m.kycExpiry)
+                ),
+                concat_bytes(delimiter, _m.blockNumber)
+            )
+        );
+
+        Signature memory _s = parse_signature(signature);
+        return ecrecover(keccak256(message), _s.v, _s.r, _s.s) == signer;
+    }
+
+    function verify_signed_price(
+        address user_address,
+        uint kyc_tier,
+        uint kyc_expiry,
+        uint block_number,
+        uint price,
+        bytes signature,
+        address signer
+    )
+        public
+        pure
+        returns (bool)
+    {
+        bytes memory delimiter = new bytes(1);
+        delimiter[0] = 0x3a;
+
+        Message memory _m = convertToBytes(user_address, kyc_tier, kyc_expiry, block_number, price);
+
+        bytes memory lengthBytes = intToBytes(_m.userAddress.length + _m.kycTier.length + _m.kycExpiry.length + _m.blockNumber.length + _m.price.length + 5);
+
+        bytes memory message = concat_bytes(
+            concat_bytes(
+                concat_bytes("\x19Ethereum Signed Message:\n", lengthBytes),
+                concat_bytes(
+                    concat_bytes(delimiter, _m.userAddress),
+                      concat_bytes(delimiter, _m.kycTier)
+                )
+            ),
+            concat_bytes(
+                concat_bytes(
+                    concat_bytes(delimiter, _m.kycExpiry),
+                    concat_bytes(delimiter, _m.blockNumber)
+                ),
+                concat_bytes(delimiter, _m.price)
+            )
+        );
+
+        Signature memory _s = parse_signature(signature);
+        return ecrecover(keccak256(message), _s.v, _s.r, _s.s) == signer;
+    }
+
+    function parse_signature(bytes _sigbytes) internal pure returns (Signature) {
+        bytes32 _r;
+        bytes32 _s;
+        uint8 _v;
+
+        assembly {
+            _r := mload(add(_sigbytes, 32))
+            _s := mload(add(_sigbytes, 64))
+            _v := byte(0, mload(add(_sigbytes, 96)))
+        }
+        if (_v < 27) {
+            _v += 27;
+        }
+
+        require(_v == 27 || _v == 28);
+        return Signature(_r, _s, _v);
+    }
+
+    function concat_bytes(bytes b1, bytes b2) internal pure returns (bytes b) {
+        b = new bytes(b1.length + b2.length);
+
+        for (uint i=0; i<b1.length;i++) {
+            b[i] = b1[i];
+        }
+        for (i=0; i<b2.length; i++) {
+            b[i + b1.length] = b2[i];
+        }
+    }
+
+    function addressToBytes(address a) internal pure returns (bytes result) {
+        bytes32 temp = bytes32(a);
+        result = new bytes(40);
+        for (uint i=0;i<20;i++) {
+            result[i*2] = hexToChar(uint8(temp[12+i]) / 16);
+            result[i*2+1] = hexToChar(uint8(temp[12+i]) % 16);
+        }
+    }
+
+    function hexToChar(uint8 hexadecimal) internal pure returns (byte c) {
+        if (hexadecimal >= 10) {
+            c = byte(hexadecimal + 97 - 10); 
+        } else {
+            c = byte(hexadecimal + 48); 
+        }
+    }
+
+    function intToBytes(uint256 number) internal pure returns (bytes result) {
+        require(number > 0);
+        bytes memory fullString = new bytes(32);
+        uint l = 0;
+        while (number != 0) {
+            fullString[l++] = byte(number % 10 + 48);
+            number = number / 10;
+        }
+
+        result = new bytes(l);
+
+        for (uint i=0;i<l;i++) {
+            result[i] = fullString[l-i-1];
+        }
+    }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+contract IdentityController is Controller {
+
+  function IdentityController(address _resolver) public
+  {
+    require(init(CONTRACT_CONTROLLER_IDENTITY, _resolver));
+  }
+
+  function put_user_kyc_approve(address _caller, address _user, uint256 _id_expiration, uint256 _daily_dgx_ng_limit)
+           if_sender_is(CONTRACT_INTERACTIVE_IDENTITY)
+           if_caller_is_role(_caller, ROLE_KYC_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().create_user(_user, _daily_dgx_ng_limit);
+    _success = _success && identity_storage().update_user_id_expiration(_user, _id_expiration);
+  }
+
+  function put_user_kyc_revoke(address _caller, address _user)
+           if_sender_is(CONTRACT_INTERACTIVE_IDENTITY)
+           if_caller_is_role(_caller, ROLE_KYC_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = marketplace_storage().create_user(_user, 0);
+    _success = _success && identity_storage().update_user_id_expiration(_user, now);
+  }
+
+  function put_user_doc(address _caller, address _user, bytes32 _doc)
+           if_sender_is(CONTRACT_INTERACTIVE_IDENTITY)
+           if_caller_is_role(_caller, ROLE_KYC_ADMIN)
+           public
+           returns (bool _success)
+  {
+    _success = identity_storage().update_user_doc(_user, _doc);
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+contract Identity is ResolverClient, DigixConstants {
+
+  function Identity(address _resolver) public
+  {
+    require(init(CONTRACT_INTERACTIVE_IDENTITY, _resolver));
+  }
+
+  function identity_controller()
+           internal
+           constant
+           returns (IdentityController _contract)
+  {
+    _contract = IdentityController(get_contract(CONTRACT_CONTROLLER_IDENTITY));
+  }
+
+  function identity_storage()
+           internal
+           constant
+           returns (IdentityStorage _contract)
+  {
+    _contract = IdentityStorage(get_contract(CONTRACT_STORAGE_IDENTITY));
+  }
+
+  function approveKyc(address _caller, address _user, uint256 _id_expiration, uint256 _daily_dgx_ng_limit)
+           internal
+           returns (bool _success)
+  {
+    _success = identity_controller().put_user_kyc_approve(_caller, _user, _id_expiration, _daily_dgx_ng_limit);
+  }
+
+  
+  
+  
+  function bulkApproveKyc(address[] _users, uint256[] _id_expirations, uint256[] _daily_dgx_ng_limits)
+           public
+           returns (bool _success)
+  {
+    address _caller = msg.sender;
+    uint256 length = _users.length;
+    for (uint256 i = 0; i < length; i += 1) {
+      require(approveKyc(_caller, _users[i], _id_expirations[i], _daily_dgx_ng_limits[i]));
+    }
+    _success = true;
+  }
+
+  function revokeKyc(address _caller, address _user)
+           internal
+           returns (bool _success)
+  {
+    _success = identity_controller().put_user_kyc_revoke(_caller, _user);
+  }
+
+  
+  
+  
+  function bulkRevokeKyc(address[] _users)
+           public
+           returns (bool _success)
+  {
+    uint256 length = _users.length;
+    address _caller = msg.sender;
+    for (uint256 i = 0; i < length; i += 1) {
+      require(revokeKyc(_caller, _users[i]));
+    }
+    _success = true;
+  }
+
+  function changeUserDoc(address _caller, address _user, bytes32 _doc)
+           internal
+           returns (bool _success)
+  {
+    _success = identity_controller().put_user_doc(_caller, _user, _doc);
+  }
+
+  
+  
+  
+  
+  function bulkChangeUserDoc(address[] _users, bytes32[] _docs)
+           public
+           returns (bool _success)
+  {
+    uint256 length = _users.length;
+    address _caller = msg.sender;
+    for (uint256 i = 0; i < length; i += 1) {
+      require(changeUserDoc(_caller, _users[i], _docs[i]));
+    }
+    _success = true;
+  }
+
+  
+  
+  
+  
+  
+  
+  function showUser(address _user)
+           public
+           constant
+           returns (uint256 _id_expiration, bytes32 _doc)
+  {
+    (_id_expiration, _doc) = identity_storage().read_user(_user);
+  }
+
+  
+  
+  
+  function checkUserKyc(address _user)
+           public
+           constant
+           returns (bool _valid_kyc)
+  {
+    _valid_kyc = identity_storage().read_user_kyc_valid(_user);
+  }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+
+
+
+
+contract MarketplaceControllerElectron is MarketplaceControllerCommon, DigixConstantsExtras, DigixConstantsElectron {
+
+    function MarketplaceControllerElectron(address _resolver) public
+    {
+        require(init(CONTRACT_CONTROLLER_MARKETPLACE, _resolver));
+    }
+
+    struct UintData {
+        uint256 pre;
+        uint256 post;
+    }
+
+    struct Config {
+        uint256 minimum_purchase_dgx_ng;
+        uint256 maximum_block_drift;
+        address eth_payment_collector;
+        address token_payment_collector;
+
+        uint256 max_dgx_available_daily;
+        uint256 price_floor_wei_per_dgx_mg;
+    }
+
+    struct Verification {
+        uint256 token_of_signer;
+        uint256 signer_min_order;
+    }
+
+    struct Purchase {
+        uint256 amount_dgx_ng;
+        uint256 token_index;
+        User buyer;
+        Verification verification;
+        Config config;
+        uint256 payment_sent;
+        uint256 price;
+        uint256 block_number;
+        address signer;
+        bytes signature;
+    }
+
+    struct User {
+        address account;
+        uint256 kyc_tier;
+        uint256 kyc_expiry;
+        uint256 total_purchased_today;
+        uint256 lifetime_limit;
+        uint256 daily_limit;
+        uint256 lifetime_total_purchased;
+        address next_address;
+    }
+
+    function marketplace_storage_electron()
+        internal
+        constant
+        returns (MarketplaceStorageElectron _contract)
+    {
+        _contract = MarketplaceStorageElectron(get_contract(CONTRACT_STORAGE_MARKETPLACE_ELECTRON));
+    }
+
+    function verification_service()
+        internal
+        constant
+        returns (VerificationService _contract)
+    {
+        _contract = VerificationService(get_contract(CONTRACT_SERVICE_VERIFICATION));
+    }
+
+    function identity()
+        internal
+        constant
+        returns (Identity _contract)
+    {
+        _contract = Identity(get_contract(CONTRACT_INTERACTIVE_IDENTITY));
+    }
+
+    function token_contract(uint256 _token_index)
+        internal
+        constant
+        returns (ERCTwenty _token_contract)
+    {
+        _token_contract = ERCTwenty(marketplace_storage_electron().all_tokens(_token_index));
+    }
+
+
+    function purchase_with_eth(
+        uint256 _wei_sent,
+        address _buyer,
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry,
+        uint256 _block_number,
+        uint256 _wei_per_dgx_mg,
+        address _signer,
+        bytes _signature
+    )
+        if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ELECTRON)
+        payable
+        public
+        returns (bool _success, uint256 _purchased_amount)
+    {
+        _purchased_amount = process_purchase_onchain(
+            _wei_sent,
+            _buyer,
+            _kyc_tier,
+            _kyc_expiry,
+            _block_number,
+            _wei_per_dgx_mg,
+            _signer,
+            TOKEN_INDEX_ETHER,
+            _signature
+        );
+        _success = true;
+    }
+
+    function purchase_with_token(
+        uint256 _tokens_sent,
+        address _buyer,
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry,
+        uint256 _block_number,
+        uint256 _token_per_1000ton,
+        address _signer,
+        uint256 _token_index,
+        bytes _signature
+    )
+        if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ELECTRON)
+        public
+        returns (bool _success, uint256 _purchased_amount)
+    {
+        
+        require(token_contract(_token_index).allowance(_buyer, address(this)) >= _tokens_sent);
+        require(_token_index != TOKEN_INDEX_FIAT); 
+
+        _purchased_amount = process_purchase_onchain(
+            _tokens_sent,
+            _buyer,
+            _kyc_tier,
+            _kyc_expiry,
+            _block_number,
+            _token_per_1000ton,
+            _signer,
+            _token_index,
+            _signature
+        );
+        _success = true;
+    }
+
+    
+    function add_purchase_with_fiat(
+        address _caller,
+        address _buyer,
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry,
+        uint256 _amount_dgx_ng
+    )
+        if_sender_is(CONTRACT_INTERACTIVE_MARKETPLACE_ELECTRON)
+        if_caller_is_role(_caller, ROLE_ELECTRON_MARKETPLACE_ADMIN)
+        public
+    {
+        Purchase memory _purchase = get_basic_purchase_object(_buyer, _kyc_tier, _kyc_expiry, TOKEN_INDEX_FIAT);
+        _purchase.amount_dgx_ng = _amount_dgx_ng;
+
+        Purchase memory _processed;
+        _processed = verify_purchase_limits(_purchase);
+        update_purchase_in_storages(_processed);
+    }
+
+    function process_purchase_onchain(
+        uint256 _payment_sent,
+        address _buyer,
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry,
+        uint256 _block_number,
+        uint256 _price,
+        address _signer,
+        uint256 _token_index,
+        bytes _signature
+    )
+        internal
+        returns (uint256 _purchase_amount)
+    {
+        
+        Purchase memory _purchase = get_basic_purchase_object(_buyer, _kyc_tier, _kyc_expiry, _token_index);
+
+        
+        
+        _purchase.payment_sent = _payment_sent;
+        _purchase.price = _price;
+        _purchase.block_number = _block_number;
+        _purchase.signer = _signer;
+        _purchase.signature = _signature;
+
+        
+        _purchase.verification.token_of_signer = marketplace_storage_electron().token_of_signer(_signer);
+        _purchase.verification.signer_min_order = marketplace_storage_electron().min_order_of_signer(_signer);
+
+        if (_token_index > TOKEN_INDEX_ETHER) {
+            
+            
+            
+            
+            
+            _purchase.amount_dgx_ng = (_purchase.payment_sent * (10 ** 18)) / (_purchase.price * (10 ** token_contract(_token_index).decimals()));
+        } else {
+            
+            _purchase.amount_dgx_ng = (_purchase.payment_sent * MILLIGRAM_TO_NANOGRAMS) / _purchase.price;
+            _purchase.config.price_floor_wei_per_dgx_mg = marketplace_storage().read_price_floor();
+            require(_purchase.price >= _purchase.config.price_floor_wei_per_dgx_mg);
+        }
+
+        Purchase memory _processed;
+
+        
+        _processed = verify_purchase_limits(verify_purchase_onchain(_purchase));
+
+        
+        update_purchase_in_storages(_processed);
+
+        if (_token_index > TOKEN_INDEX_ETHER) {
+            
+            _purchase.config.token_payment_collector = marketplace_storage_electron().token_payment_collector(_token_index);
+            require(
+                token_contract(_token_index)
+                .transferFrom(
+                    _purchase.buyer.account,
+                    _purchase.config.token_payment_collector,
+                    _purchase.payment_sent
+                )
+            );
+        } else {
+            
+            _processed.config.eth_payment_collector.transfer(_purchase.payment_sent);
+        }
+
+        _purchase_amount = _purchase.amount_dgx_ng;
+    }
+
+    function get_basic_purchase_object(address _buyer, uint256 _kyc_tier, uint256 _kyc_expiry, uint256 _token_index)
+        internal
+        constant
+        returns (Purchase memory)
+    {
+        
+        Purchase memory _purchase;
+        (, _purchase.config.minimum_purchase_dgx_ng, _purchase.config.maximum_block_drift, _purchase.config.eth_payment_collector) = marketplace_storage().read_config();
+        _purchase.config.max_dgx_available_daily = marketplace_storage().read_max_dgx_available_daily();
+        _purchase.buyer.account = _buyer;
+        _purchase.buyer.kyc_tier = _kyc_tier;
+        _purchase.buyer.kyc_expiry = _kyc_expiry;
+        _purchase.token_index = _token_index;
+        return _purchase;
+    }
+
+    function update_purchase_in_storages(Purchase memory _processed)
+        internal
+    {
+        
+        require(marketplace_storage().update_user_purchase(
+            _processed.buyer.account,
+            _processed.buyer.account,
+            _processed.amount_dgx_ng,
+            _processed.price,
+            _processed.block_number,
+            DUMMY_NONCE)
+        );
+
+        
+        
+        
+        marketplace_storage_electron().add_purchase(
+            _processed.buyer.account,
+            marketplace_storage().read_total_number_of_purchases() - 1,
+            _processed.token_index,
+            _processed.amount_dgx_ng
+        );
+    }
+
+    function verify_purchase_onchain(Purchase memory _purchase)
+        internal
+        constant
+        returns (Purchase memory _processed)
+    {
+        _processed = _purchase;
+
+        
+        require(_purchase.verification.token_of_signer == _purchase.token_index);
+        
+        require(_purchase.amount_dgx_ng >= _purchase.verification.signer_min_order);
+
+        
+        require(
+            verification_service().verify_signed_price(
+                _purchase.buyer.account,
+                _purchase.buyer.kyc_tier,
+                _purchase.buyer.kyc_expiry,
+                _purchase.block_number,
+                _purchase.price,
+                _purchase.signature,
+                _purchase.signer
+            )
+        );
+
+        
+        require((_processed.block_number + _purchase.config.maximum_block_drift) >= block.number);
+    }
+
+    function verify_purchase_limits(Purchase memory _purchase)
+        internal
+        constant
+        returns (Purchase memory _processed)
+    {
+        _processed = _purchase;
+
+        
+        (
+            ,, _processed.buyer.lifetime_total_purchased,
+            , _processed.buyer.next_address
+        ) = marketplace_storage_electron().read_user(_processed.buyer.account);
+        (,_processed.buyer.total_purchased_today) = marketplace_storage().read_user(_processed.buyer.account);
+
+        
+        (_processed.buyer.daily_limit, _processed.buyer.lifetime_limit) = get_user_limits(
+            _processed.buyer.account,
+            _processed.buyer.kyc_tier,
+            _processed.buyer.kyc_expiry
+        );
+
+        
+        
+        require(
+            (_processed.buyer.kyc_tier == 1) ||
+            (_processed.buyer.kyc_expiry > now)
+        );
+        
+        require(marketplace_storage().read_total_global_purchased_today() + _processed.amount_dgx_ng <= _processed.config.max_dgx_available_daily);
+        
+        require(_processed.amount_dgx_ng >= _processed.config.minimum_purchase_dgx_ng);
+        
+        require((_processed.buyer.total_purchased_today + _processed.amount_dgx_ng) <= _processed.buyer.daily_limit);
+        
+        require((_processed.buyer.lifetime_total_purchased + _processed.amount_dgx_ng) <= _processed.buyer.lifetime_limit);
+        
+        require(_processed.buyer.next_address == address(0x0));
+    }
+
+    function get_user_limits(address _user, uint256 _kyc_tier, uint256 _kyc_expiry)
+        public
+        constant
+        returns (
+            uint256 _daily_limit,
+            uint256 _lifetime_limit
+        )
+    {
+        
+        (
+            _lifetime_limit,
+            _daily_limit,,,
+        ) = marketplace_storage_electron().read_user(_user);
+
+        
+        bool _valid_kyc = ((_kyc_tier > 1) && (_kyc_expiry > now));
+
+        if (!_valid_kyc) {
+            
+            _daily_limit = max(_daily_limit, marketplace_storage_electron().default_tier1_daily_limit());
+            _lifetime_limit = max(_lifetime_limit, marketplace_storage_electron().default_tier1_lifetime_limit());
+        } else {
+            
+            _daily_limit = max(_daily_limit, marketplace_storage_electron().default_tier2_daily_limit());
+            _lifetime_limit = MAX_INTEGER;
+        }
+    }
+
+    function max(uint a, uint b)
+        internal
+        pure
+        returns (uint)
+    {
+        if (a < b) {
+            return b;
+        }
+        return a;
+    }
+}
+
+
+
+pragma solidity ^0.4.19;
+
+
+
+
+
+
+
+contract MarketplaceElectron is MarketplaceCommon, DigixConstantsElectron {
+
+    function MarketplaceElectron(address _resolver) public
+    {
+        require(init(CONTRACT_INTERACTIVE_MARKETPLACE_ELECTRON, _resolver));
+    }
+
+    function marketplace_controller_electron()
+        internal
+        constant
+        returns (MarketplaceControllerElectron _contract)
+    {
+        _contract = MarketplaceControllerElectron(get_contract(CONTRACT_CONTROLLER_MARKETPLACE));
+    }
+
+    function marketplace_storage_electron()
+        internal
+        constant
+        returns (MarketplaceStorageElectron _contract)
+    {
+        _contract = MarketplaceStorageElectron(get_contract(CONTRACT_STORAGE_MARKETPLACE_ELECTRON));
+    }
+
+    function token_contract()
+        internal
+        constant
+        returns (ERCTwenty _contract)
+    {
+        _contract = ERCTwenty(get_contract(CONTRACT_INTERACTIVE_TOKEN));
+    }
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    function purchaseWithEth(
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry,
+        uint256 _block_number,
+        uint256 _wei_per_dgx_mg,
+        address _signer,
+        bytes _signature
+    )
+        payable
+        public
+        returns (bool _success, uint256 _purchased_amount)
+    {
+        address _sender = msg.sender;
+
+        (_success, _purchased_amount) = marketplace_controller_electron()
+            .purchase_with_eth
+            .value(msg.value)(
+                msg.value,
+                _sender,
+                _kyc_tier,
+                _kyc_expiry,
+                _block_number,
+                _wei_per_dgx_mg,
+                _signer,
+                _signature
+            );
+
+        require(_success);
+    }
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    function purchaseWithToken(
+        uint256 _tokens_sent,
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry,
+        uint256 _block_number,
+        uint256 _token_per_1000ton,
+        address _signer,
+        uint256 _token_index,
+        bytes _signature
+    )
+        public
+        returns (bool _success, uint256 _purchased_amount)
+    {
+        address _sender = msg.sender;
+
+        (_success, _purchased_amount) =
+            marketplace_controller_electron().purchase_with_token(
+                _tokens_sent,
+                _sender,
+                _kyc_tier,
+                _kyc_expiry,
+                _block_number,
+                _token_per_1000ton,
+                _signer,
+                _token_index,
+                _signature
+            );
+
+        require(_success);
+    }
+
+    
+    
+    
+    
+    
+    
+    
+    function addFiatPurchase(
+        address _buyer,
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry,
+        uint256 _amount_dgx_ng
+    )
+        public
+    {
+        marketplace_controller_electron().add_purchase_with_fiat(msg.sender, _buyer, _kyc_tier, _kyc_expiry, _amount_dgx_ng);
+    }
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    function getPurchaseLimits(
+        address _buyer,
+        uint256 _kyc_tier,
+        uint256 _kyc_expiry
+    )
+        public
+        returns (
+            uint256 _daily_limit,
+            uint256 _lifetime_limit,
+            uint256 _purchased_today,
+            uint256 _purchased_lifetime,
+            uint256 _marketplace_balance,
+            uint256 _marketplace_daily_limit,
+            uint256 _minimum_purchase_amount,
+            uint256 _maximum_block_drift
+        )
+    {
+        (_daily_limit, _lifetime_limit) = marketplace_controller_electron().get_user_limits(_buyer, _kyc_tier, _kyc_expiry);
+        (, _purchased_today) = marketplace_storage().read_user(_buyer);
+        (,, _purchased_lifetime,,) = marketplace_storage_electron().read_user(_buyer);
+        _marketplace_balance = token_contract().balanceOf(get_contract(CONTRACT_STORAGE_MARKETPLACE));
+        (_marketplace_daily_limit, _minimum_purchase_amount, _maximum_block_drift,) = marketplace_storage().read_config();
+    }
+}
