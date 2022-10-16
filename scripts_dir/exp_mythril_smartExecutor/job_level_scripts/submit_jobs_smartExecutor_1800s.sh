@@ -7,7 +7,7 @@ run_script='exp_run_smartExecutor_1800s.sh' # the script running within the cont
 job_1_container_script='exp_1_container_smartExecutor.sh' # the script to start a container 
 
 
-base_path='/scratch/06227/qiping/exp_mythril_smartExecutor/smartExecutor_data/' # the path where all data required for the experiments are placed
+base_path='/scratch/06227/'+Constants.user+'/exp_mythril_smartExecutor/smartExecutor_data/' # the path where all data required for the experiments are placed
 
 con_work_dir='/home/mythril/' # the work directory  in the container
 

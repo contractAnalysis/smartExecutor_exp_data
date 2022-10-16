@@ -17,7 +17,6 @@ A generated group has the following:
 3. a 'exp_run_tool_*.sh' file running a tool within in a container to execute the contracts in the 'contracts' folder.
 4. a 'exp_1_container_*.sh' file launching a Singularity container to run the tool script 'exp_run_tool\_\*.sh'.
 
-Notes: for some tools, more files are required. They are added by manually executing the necessary commands.
 
 
 ### Steps to Generate
@@ -36,21 +35,17 @@ execute SB_Curated.py in Pycharm IDE
 
 ##### Generate data for experiments.<br>
 
-generate data for RQ1.experiment 1:
+generate data for RQ1.experiment 1 (exp_mythril_smartExecutor):
 ```
 execute generate_exp_data.py in Pycharm IDE
 ```
-generate data for RQ1.experiment 2:
+generate data for RQ1.experiment 2 (exp_phase2):
 ```
 execute generate_exp_phase2.py in Pycharm IDE
 ```
 
-generate data for RQ2:
+generate data for RQ2 (exp_benchmark):
 ```
 execute generate_exp_benchmark.py in Pycharm IDE
 ```
-
-
-
-
-
+Notes: for Smartian, exp_compile_contracts.sh in job_level_scripts folder should be run to get the compiled results of contracts.

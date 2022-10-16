@@ -6,7 +6,7 @@ group_name_prefix='contracts_4_group'
 run_script='exp_run_batin.sh'
 job_1_container_script='exp_1_container_batin.sh'
 
-base_path='/scratch/06227/qiping/exp_benchmark/SB_Curated/IB_RE_ULC/batin_data/'
+base_path='/scratch/06227/'+Constants.user+'/exp_benchmark/SB_Curated/IB_RE_ULC/batin_data/'
 con_work_dir='/home/batin/'
 
 

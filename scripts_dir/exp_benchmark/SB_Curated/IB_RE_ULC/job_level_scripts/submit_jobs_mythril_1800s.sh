@@ -6,7 +6,7 @@ group_name_prefix='contracts_4_group'
 run_script='exp_run_mythril_1800s.sh'
 job_1_container_script='exp_1_container_mythril.sh'
 
-base_path='/scratch/06227/qiping/exp_benchmark/SB_Curated/IB_RE_ULC/mythril_data/'
+base_path='/scratch/06227/'+Constants.user+'/exp_benchmark/SB_Curated/IB_RE_ULC/mythril_data/'
 con_work_dir='/home/mythril/'
 
 

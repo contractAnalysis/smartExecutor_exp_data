@@ -6,7 +6,7 @@ group_name_prefix='contracts_4_group'
 run_script='exp_run_smartian_1800s.sh'
 job_1_container_script='exp_1_container_smartian.sh'
 
-base_path='/scratch/06227/qiping/exp_benchmark/SB_Curated/IB_RE_ULC/smartian_data/'
+base_path='/scratch/06227/'+Constants.user+'/exp_benchmark/SB_Curated/IB_RE_ULC/smartian_data/'
 con_work_dir='/home/test/tools/Smartian/work_dir/'
 
 

@@ -9,3 +9,5 @@ scripts_dir = '/home/wei/PycharmProjects/SmartExecutor_experiment_preparation/sc
 
 # the directory where the generated data will be outputed
 results_dir = '/media/sf___share_vms/test/'
+
+user='xxx'
