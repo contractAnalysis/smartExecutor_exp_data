@@ -30,7 +30,7 @@ execute sGuard_DP.py in Pycharm IDE
 
 get the contract list for SB Curated dataset:
 ```
-execute SB_Curated.py in Pycharm IDE
+execute SB_Curated_DP.py in Pycharm IDE
 ```
 
 ##### Generate data for experiments.<br>
@@ -49,3 +49,6 @@ generate data for RQ2 (exp_benchmark):
 execute generate_exp_benchmark.py in Pycharm IDE
 ```
 Notes: for Smartian, exp_compile_contracts.sh in job_level_scripts folder should be run to get the compiled results of contracts.
+
+#### Job level scripts
+The job-level scripts are the scripts that can launch a specified number of Singularity containers in parallel. They have important parameters needed to be set up. 
