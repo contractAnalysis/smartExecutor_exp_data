@@ -4,11 +4,6 @@ As the experiments are conducted through Singularity containers, the experiments
 
 </p>
 
-#### Preparation
-1. datasets 
-2. Docker images of the tools involved in experiments.
-3. Scripts to run each tool using Singularity containers.
-4. Organize scripts based on experiments, like the directories in 'scripts_dir' folder.
 
 #### Results of Data Generation
 A generated group has the following:
@@ -17,6 +12,11 @@ A generated group has the following:
 3. a 'exp_run_tool_*.sh' file running a tool within in a container to execute the contracts in the 'contracts' folder.
 4. a 'exp_1_container_*.sh' file launching a Singularity container to run the tool script 'exp_run_tool\_\*.sh'.
 
+#### Preparation
+1. datasets 
+2. Docker images of the tools involved in experiments.
+3. Scripts to run each tool using Singularity containers.
+4. Organize scripts based on experiments, like the directories in 'scripts_dir' folder.
 
 
 ### Steps to Generate
