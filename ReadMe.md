@@ -4,8 +4,6 @@ As the experiments are conducted through Singularity containers, the experiments
 
 </p>
 
-
-#### Results of Data Generation
 A generated group has the following:
 1. a 'contracts' folder containing the contracts to be evaluated within one container.
 2. a '*.csv' file listing the Solidity name, solc version, and contract name for each contract to be evaluated.
