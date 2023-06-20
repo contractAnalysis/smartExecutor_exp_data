@@ -13,3 +13,4 @@ results_dir = '/media/sf___share_vms/test/'
 user='qiping'
 
 solidity_inline_assembly='/media/sf___share_vms/solidity_inline_assembly/'
+project_path = '/home/wei/PycharmProjects/smartExecutor_data_preparation/'
