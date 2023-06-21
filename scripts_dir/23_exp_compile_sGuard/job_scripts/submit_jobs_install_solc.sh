@@ -2,7 +2,7 @@
 
 # submit 1 job which start 30 containers
 
-base_path='/scratch/06227/qiping/23_exp_compile_sGuard/'
+base_path='/scratch/06227/user_name/23_exp_compile_sGuard/' # replace with the actual user root
 group_name_prefix='contracts_167_group'
 start_container_script='exp_start_container.sh'
 
@@ -13,7 +13,7 @@ con_work_dir='/home/compile/'
 
 
 sif_dir=${base_path}
-sif_name='contract_analysis_compile1.sif'
+sif_name='contract_analysis_compile1.sif' # replace with the actual sif image name
 
 
 

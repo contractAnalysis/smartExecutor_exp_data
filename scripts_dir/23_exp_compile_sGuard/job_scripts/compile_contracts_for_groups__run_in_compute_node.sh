@@ -1,12 +1,11 @@
 #!/bin/bash
 
 
-base_path='/scratch/06227/qiping/23_exp_compile_sGuard/'
+base_path='/scratch/06227/user_name/23_exp_compile_sGuard/'# replace with the actual user root
 group_name_prefix='contracts_167_group'
 
 
-sif_name='contract_analysis_compile1.sif' # any sif file that has installed solc-select
-compile_script='compile_contracts_container.sh'
+sif_name='contract_analysis_compile1.sif' # replace with the actual sif image name
 
 for i in {1..30}
 

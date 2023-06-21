@@ -1,10 +1,10 @@
 #!/bin/bash
 
-base_path='/scratch/06227/qiping/23_exp_compile_sGuard/'
+base_path='/scratch/06227/user_name/23_exp_compile_sGuard/' # replace with the actual user root
 group_name_prefix='contracts_167_group'
 
 
-sif_name='contract_analysis_compile1.sif' # any sif file that has installed solc-select
+sif_name='contract_analysis_compile1.sif' # replace with the actual sif image name
 install_solc_script='install_solc_container.sh'
 
 for i in {1..30} #30 containers
