@@ -27,9 +27,9 @@ Clone this repository:
 ```bash
 git clone https://github.com/contractAnalysis/smartExecutor_exp_data.git
 ```
-Set up the project root directory to **base_dir** in your_project_root/scripts/**config_global.sh**.
+Set up the project root directory to the **base_dir** parameter in your_project_root/scripts/**config_global.sh**.
 
-Assume that the current directory is the project root directory.   
+Make sure the current directory is the project root directory.   
 
 
 #### Step 1: Prepare for Docker images
@@ -37,7 +37,8 @@ Assume that the current directory is the project root directory.
 ./docker_image_preparation/prepare_for_docker_images.sh
 ```
 #### Step 2: Compile Contracts 
-Before compiling, set the number of Docker containers to **batch_size** in */config_global.sh
+Set the number of Docker containers to run simultaneously by setting the **batch_size** parameter in your_project_root/scripts/**config_global.sh**.
+
 In our experiments, **batch_size** is set to 30 (each container has 4 cpus).
 
 ```shell
@@ -45,7 +46,7 @@ In our experiments, **batch_size** is set to 30 (each container has 4 cpus).
 ```
 
 #### Step 3: Launch Experiments
-By executing commands below, the experiment results are saved in the directory: your_project_root/results/
+Run the experiment scripts below and check results in the directory: your_project_root/results/
 ```shell
 # run experiments for RQ1 and RQ2
 ./scripts/launch_24_exp_sGuard.sh
@@ -57,7 +58,7 @@ By executing commands below, the experiment results are saved in the directory: 
 ```
 
 #### Step 4: Collect Results
-Set the your project root directory to **base_dir** parameter in your_project_root/result_collection/config.py
+Set your project root directory to the **base_dir** parameter in your_project_root/result_collection/**config.py**.
 
 ```shell
 # collect results and save into csv files in to the result folder
