@@ -1,0 +1,10 @@
+0x430626f79ac4ecea6a4be20ad3d68965b36e0f31.sol,0.4.26,ConverterUpgrader
+0x52CD0512D736B5Cf418D1C75842c1d5eB4ba021b.sol,0.4.26,SafeMath
+0xa1848d6af6ee11ff8dd0f8cd20bc8d0def18d9f7.sol,0.5.0,PolicyGroup
+0xafe2d086303a49c34d0d23848cc694ea8dee5145.sol,0.4.26,OwnedUpgradeabilityProxy
+0x493bc72e7f6cac101fcdc3a4568b94ab270c3dce.sol,0.5.4,FixedSupplyToken
+0x60c409d9135aae95d53b44fef6adf371db9260fb.sol,0.4.18,TICOEXCHANGE
+0x0597eaf957d896a5751aa35324bf24e1d9bc0f2c.sol,0.5.0,ycUSDC
+0x43B45AD7a3b5FA684B8a8C9F84fA821fc16A2579.sol,0.4.24,BurnerToken
+0x9cb31da7bd0cc9303a42b1ebafe0d361670b4e6c.sol,0.4.23,MainToken
+0x2d4ab10a0aba7d7feebea2b0fc07d93bdaec2714.sol,0.5.2,WithdrawManager

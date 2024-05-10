@@ -1,0 +1,82 @@
+
+#=====================================
+May 27, 2023
+
+--------------------------------------------------------------------------
+create a new project of Mythril and make it runnable properly
+
+1, clone the Mythril
+	git clone https://github.com/Consensys/mythril.git
+
+2, get the latest version
+	git checkout v0.23.22
+
+3, generate a new venv insteading of using the venv built for the version v0.22.19, which has an error related solcx
+
+	#install the requirement in the terminal
+	/home/wei/PycharmProjects/mythril_5_15_23/venv/bin/python -m pip install -r requirements.txt
+
+4, test if a contract can be executed
+
+	test on Crowdsale.sol: 0.4.25:Crowdsale
+	
+	solc-select install 0.4.25 in terminal of Pycharm IDE
+
+	# on binary file, no error
+	-v5
+	analyze
+	--codefile
+	/media/sf___share_vms/binary_files/Crowdsale/Crowdsale.bin
+
+	# on source code, there is error related to compiler
+	analyze
+	/home/wei/PycharmProjects/Contracts/_wei/Crowdsale.sol:Crowdsale
+
+	reason: the required compiler version has no execute permission within the newly generated venv
+		/PycharmProjects/mythril_5_15_23/venv/.solc-select/artifacts/solc-0.4.25$ 
+ 		solc-0.4.25 has no execution permission
+
+	when obtaining the solc version:
+		mythril assume that version is in the same line as programa solidity
+		0.5.17 is not supported
+
+--------------------------------------------------------------------------
+make the foundmental changes shared by both mythril and our approach
+
+1 add or modify 
+	a, Dockerfile:add
+		RUN pip3 install solc-select
+		RUN solc-select install all
+		RUN export PATH=/usr/local/bin:$PATH
+	b,svm.py:
+		method:sym_exec:add
+		print(f'#@statespace')
+            	print("{} nodes, {} edges, {} total states".format(len(self.nodes), len(self.edges), self.total_states))
+
+	c, coverage_plugin.py:
+		method: stop_sym_exec_hook:add
+		print(f'#@coverage')
+                print("Achieved {:.2f}% coverage for code: {}".format(
+                        cov_percentage, code))
+	d,mythril_analyzer.py:
+		method:dump_statespace:modify
+		compulsory_statespace=True,#@wei
+
+2 generate a patch file: mythril_v0.23.22_basic.patch
+	git diff > mythril_v0.23.22_basic.patch
+
+
+3 commit and generate a new branch mythri_v0.23.22
+	git add .
+	git commit -m '...'
+	git checkout -b mythril_v0.23.22  # generate a new branch 
+
+--------------------------------------------------------------------------
+build SmartExecutor, version: 2.0
+
+1, generate a new branch from the branch mythril_v0.23.22: smartexecutor_2.0
+	git checkout -b smartexecutor_2.0
+
+2, add or modify
+......
+

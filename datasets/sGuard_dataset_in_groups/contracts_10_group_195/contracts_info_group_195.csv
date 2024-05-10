@@ -1,0 +1,10 @@
+0x3df605ca85e8d677c8f6e2665ebcddbd801ee9f9.sol,0.6.0,InstaMakerResolver
+0x1e13627cd6b6eae63a594fddd7d55528bf7e3b59.sol,0.5.0,SafeMath
+0x23dc815ec330592989c27f81cd7abe3c389790a5.sol,0.5.16,BlockbirdLock
+0x43d74a5a6e9db42123c8c7f8150b1f63a36e79da.sol,0.5.14,TokenFactory
+0x93b78ba14de481fe388b062c0bb62b389630e2b4.sol,0.5.17,StrategyMKRVaultDAIDelegate
+0x31d3a8ac24ba0eda71b600174bfcc59b37036e3c.sol,0.4.19,RavencoinGold
+0x0c6b695cc5e6c9202b2957a2be0a44351d2abea9.sol,0.4.18,TokenRegistry
+0x1fc964c2d544f5ad953162ab1b6a4ce2d983444a.sol,0.5.17,StrategyCurveYCRV
+0x1864Ff44b3f94732b1dEf2502383FE138C636444.sol,0.5.16,Proxy
+0x0a9be65f9d2c294d665f1d249179219a396dddfb.sol,0.4.25,Withdraw

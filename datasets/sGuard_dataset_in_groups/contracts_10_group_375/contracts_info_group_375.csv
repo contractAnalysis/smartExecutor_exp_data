@@ -1,0 +1,10 @@
+0x2c1796a19110d3ab9d1b425e3ec3ff178eb2cb6c.sol,0.6.6,DeployableToken
+0xb847dfb6fe8a7fc5fae967e98b6e0dc98123e36a.sol,0.5.12,DSSLeverage
+0x28ad54a7208608d17b8d4a4a4034f254a28df85e.sol,0.4.18,OrderbookReserve
+0x6251e725cd45fb1af99354035a414a2c0890b929.sol,0.4.24,Erc20Base
+0x87b7282b91d58997490a4adf1dfdf0c195a4978d.sol,0.5.0,iDAI
+0x7ba29e643ef0b7a56fb850ac0e2023f938b78435.sol,0.6.6,TransferHelper
+0x99d7159b0a2f0f65ea7551ce560db24c19875a8b.sol,0.5.1,horizex
+0x28d0e77f4576cb783a763efe1fd8106c3ca530ed.sol,0.6.0,Escrow
+0xa5de27a585f590567888cb617ec0ca0f438fd21f.sol,0.5.2,PictosisGenesisExchanger
+0xa0c15a8cee997af72907b1f11c29a1817743c0f2.sol,0.4.25,JPMeijiTetsubin

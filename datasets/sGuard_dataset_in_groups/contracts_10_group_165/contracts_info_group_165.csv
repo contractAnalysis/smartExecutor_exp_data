@@ -1,0 +1,10 @@
+0x7ca5a868ef08d97dc2ad5d9addafef10125d1a37.sol,0.5.0,CompoundBasicProxy
+0x809ccf986464bbd278d94fa87b6e832e6d6acbb4.sol,0.6.9,ChainlinkLINKUSDCPriceOracleProxy
+0x1efcba7f1fa38819b23c303e905c1a0bf51e45d3.sol,0.4.26,GiftOfCompound
+0x1bf7e34dcb621ae2efa48aa71c704f7c2144e6ab.sol,0.4.19,LYT
+0x4feeaeced575239b46d70b50e13532ecb62e4ea8.sol,0.5.17,StrategyCurveSBTC
+0x4d95a049d5b0b7d32058cd3f2163015747522e99.sol,0.5.12,Flopper
+0xaecfa2c0f4bad0ecee46dcd1250cd0334fe28bc0.sol,0.6.0,ConnectCompound
+0x41acf485dbea7157498e2035cf4e3e728cb1aa71.sol,0.5.0,DefaultReserveInterestRateStrategy
+0x8073679f7eec97478695fae06d5522b0caa3127c.sol,0.5.1,HKDOLLARSTABLECOIN
+0x2c55f6284caee41d3bcc33305cc54d5e0bfb0bad.sol,0.5.4,Tip

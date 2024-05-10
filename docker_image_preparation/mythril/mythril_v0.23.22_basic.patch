@@ -1,0 +1,57 @@
+diff --git a/Dockerfile b/Dockerfile
+index 543e02bb..993e65ab 100644
+--- a/Dockerfile
++++ b/Dockerfile
+@@ -28,6 +28,10 @@ RUN apt-get update \
+      wget \
+   && ln -s /usr/bin/python3 /usr/local/bin/python
+ 
++RUN pip3 install solc-select
++RUN solc-select install all
++RUN export PATH=/usr/local/bin:$PATH
++
+ COPY ./requirements.txt /opt/mythril/requirements.txt
+ 
+ RUN cd /opt/mythril \
+diff --git a/mythril/laser/ethereum/svm.py b/mythril/laser/ethereum/svm.py
+index 47c65682..d8ad16ba 100644
+--- a/mythril/laser/ethereum/svm.py
++++ b/mythril/laser/ethereum/svm.py
+@@ -208,7 +208,8 @@ class LaserEVM:
+                 len(self.edges),
+                 self.total_states,
+             )
+-
++            print(f'#@statespace')
++            print("{} nodes, {} edges, {} total states".format(len(self.nodes), len(self.edges), self.total_states))
+         for hook in self._stop_sym_exec_hooks:
+             hook()
+ 
+diff --git a/mythril/laser/plugin/plugins/coverage/coverage_plugin.py b/mythril/laser/plugin/plugins/coverage/coverage_plugin.py
+index f235a5e8..977ba007 100644
+--- a/mythril/laser/plugin/plugins/coverage/coverage_plugin.py
++++ b/mythril/laser/plugin/plugins/coverage/coverage_plugin.py
+@@ -64,6 +64,9 @@ class InstructionCoveragePlugin(LaserPlugin):
+                         cov_percentage, string_code
+                     )
+                 )
++                print(f'#@coverage')
++                print("Achieved {:.2f}% coverage for code: {}".format(
++                        cov_percentage, string_code))
+ 
+         @symbolic_vm.laser_hook("execute_state")
+         def execute_state_hook(global_state: GlobalState):
+diff --git a/mythril/mythril/mythril_analyzer.py b/mythril/mythril/mythril_analyzer.py
+index 2f73736f..aabcded6 100644
+--- a/mythril/mythril/mythril_analyzer.py
++++ b/mythril/mythril/mythril_analyzer.py
+@@ -157,7 +157,8 @@ class MythrilAnalyzer:
+                     create_timeout=self.create_timeout,
+                     transaction_count=transaction_count,
+                     modules=modules,
+-                    compulsory_statespace=False,
++                    compulsory_statespace=True,  # @wei
++                    # compulsory_statespace=False,
+                     disable_dependency_pruning=self.disable_dependency_pruning,
+                     custom_modules_directory=self.custom_modules_directory,
+                 )

@@ -1,0 +1,10 @@
+0x76dd09951c4760948b1f5cef679172d4e200fff2.sol,0.5.0,BidProxy
+0x5baba73ba37d58ab7e17fff1fffab5719f9c32a0.sol,0.5.8,Registry
+0xb3e7a25368fe0cbc65f638454733cde721d86f72.sol,0.5.16,TestToken
+0x1f702f23d315b5aaf2c66eebb5aeea5e7af275c1.sol,0.4.26,Trader
+0x49739039b72066bde4af3f5405afce843e7ff836.sol,0.4.26,UniswapTradeExample
+0xb0399c2fb7958d8d0fde93ec58c4efa1ba501375.sol,0.4.24,FiatTokenV1
+0x2B7b004310D291c53011d2EE2977b878EAFb6F97.sol,0.5.0,TokenMintERC20Token
+0x59f312d142d985b21f438477b24c38aff27cd915.sol,0.5.12,ExchangerToken
+0x860ec43521fd4e41d77b4c3c4045a8ccc7b2ad79.sol,0.5.17,StrategyVaultTUSD
+0x08399ab5ebbe96870b289754a7bd21e7ec8c6fcb.sol,0.5.0,Token

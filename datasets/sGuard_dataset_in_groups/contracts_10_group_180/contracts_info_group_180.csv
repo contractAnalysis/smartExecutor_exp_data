@@ -1,0 +1,10 @@
+0x76fd43840c3944bfaa9da24125d76d7a85cf5269.sol,0.5.0,Withdraw
+0x164b13ad1a91b13978cb9876acad9907ac5d5143.sol,0.4.26,SafeMath
+0x3a3a65aab0dd2a17e3f1947ba16138cd37d08c04.sol,0.5.0,LendingPoolLiquidationManager
+0x8e10c1a0d80018354944093be9a7e2cbdd6c437f.sol,0.4.22,StandardMintableToken
+0x07759C39BbC1F88CA6b61B5EF500472Ca606DF89.sol,0.4.24,Delay
+0x743c26f5420f50937e4d06c3332ac59568167802.sol,0.4.26,SmartToken
+0x083ff667415ed1be3bbdc847c829cbebe38c6140.sol,0.5.0,Counters
+0xa2d0e29a9627e20FD886a8106DD0AE429403a57d.sol,0.4.23,MainToken
+0x2b119d4ecdc6f3a4c687ff5454aef6ee257ecfd4.sol,0.5.16,CompBalance
+0x4846c6837ec670bbd1f5b485471c8f64ecb9c534.sol,0.6.12,Staking

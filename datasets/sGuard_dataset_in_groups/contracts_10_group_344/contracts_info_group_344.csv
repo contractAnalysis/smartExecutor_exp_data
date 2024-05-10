@@ -1,0 +1,10 @@
+0x86ac75909d3dfd6fd0d88d3bab92700af5ca2a68.sol,0.5.0,Staking
+0x95a222fd7ff6765a1177ebb53266c9673fffced4.sol,0.4.26,UniswapTradeExample
+0x5471f4a885ee8a545330629b28db76bb3a62f133.sol,0.6.0,CompoundSubscriptionsProxy
+0x5ad2120169cd5155f213cc3b58838e545bee1779.sol,0.5.0,CompoundSaverProxy
+0x911a158850e34e5ffaa2431a28a159db5730e67a.sol,0.4.25,ContractDeployer
+0x19816294969ec8745a402133bf7c256c02eeabc9.sol,0.4.20,ERC20Token
+0x1c9e18c8ab156753f7eca95d8c042f7842aaf09e.sol,0.5.0,GatewayLib
+0x09cc6b1d5dffa56e42cc374d451c4b3007e03cf8.sol,0.4.19,PoPAdminElectron
+0x7c4a899b680651939e134f9225775e9f0adf303a.sol,0.6.6,AccessControlledAggregator
+0xaeb0162aa17165708210436e72462ecfa344ecd8.sol,0.5.17,Moloch

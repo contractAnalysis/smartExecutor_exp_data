@@ -1,0 +1,10 @@
+0xa806af507d0b05714cd08eaa0039b4a829016099.sol,0.6.11,VetherPools
+0xaf448eda0c5fe6f80d53a5b89d300b2047322b11.sol,0.5.11,Crowdsale
+0x2e302802a33dDA5Edf530a35a330613086440cae.sol,0.6.0,BasicResolver
+0xa17ebd0b1496091221799dec42ff12ecf7bfb248.sol,0.5.16,StableAMM
+0x285b7f0f1f16ecfc9d12e78ba6fcebfb69e42d64.sol,0.5.16,MLMcrowdfunding
+0x33d835ea9cfc06169081b7358fd46280eea16080.sol,0.4.25,ZipmexTokenV1
+0x6b30661825AeCA80fB50739F0b77C5B3178A836f.sol,0.4.23,TemplateCrowdsale
+0x26ea744e5b887e5205727f55dfbe8685e3b21951.sol,0.5.0,yUSDC
+0x7a174d2c76e2150882d2d759c226939fe247c095.sol,0.4.26,ETOTermsConstraints
+0xa45cb1bbb00cd9c28435c58df11c6a3f08f36302.sol,0.6.6,AccessControlledAggregator
