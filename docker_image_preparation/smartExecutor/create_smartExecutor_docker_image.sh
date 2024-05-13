@@ -6,7 +6,7 @@
 # two ways to obtain the Docker image of SmartExecutor
 
 # 1, pull the created Docker image
-docker pull 23278942/smartexcutor
+docker pull 23278942/smartexcutor:v4.0
 docker pull 23278942/smartexecutor:v3.01
 docker pull 23278942/smartexecutor:v0.3 #i.e. v3.0
 

@@ -4,7 +4,8 @@
 
 # Define a state variable
 
-base_dir="/mnt/d/wei_space/24_experiments/smartExecutor_artifact/"
+#base_dir="/mnt/d/wei_space/24_experiments/smartExecutor_artifact/"
+base_dir="/mnt/c/Users/SERC/wei_pycharm/smartExecutor_exp_data/"
 datasets_dir=${base_dir}+"datasets/"
 results_dir=${base_dir}+"results/"
 scripts_dir=${base_dir}+"scripts/"
@@ -33,6 +34,6 @@ export container_work_dir_smartian image_smartian
 
 
 container_work_dir_smartExecutor="/home/smartExecutor/"
-image_smartExecutor=ec8ae0a550bf #v4.0
+image_smartExecutor=d6c147bb8a7c #v4.0
 image_smartExecutor_v301=ac9d3b850976 #v3.01
 export container_work_dir_smartExecutor image_smartExecutor image_smartExecutor_v301
